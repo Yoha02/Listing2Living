@@ -1,0 +1,7 @@
+[
+  {"id":"catalog-sofa","name":"Linen two-seat sofa","kind":"sofa","position":[1.25,7.30,0.42],"dimensions":[1.90,0.86,0.84],"rotation":0,"color":"#ded2be","movable":true,"basis":"user"},
+  {"id":"catalog-desk","name":"Oak work desk","kind":"desk","position":[0.78,5.75,0.375],"dimensions":[1.20,0.60,0.75],"rotation":1.57079632679,"color":"#b99166","movable":true,"basis":"user"},
+  {"id":"catalog-chair","name":"Upholstered chair","kind":"chair","position":[1.65,5.75,0.42],"dimensions":[0.53,0.55,0.84],"rotation":1.57079632679,"color":"#788472","movable":true,"basis":"user"},
+  {"id":"catalog-table","name":"Round coffee table","kind":"table","position":[1.65,6.30,0.20],"dimensions":[0.75,0.75,0.40],"rotation":0,"color":"#926c45","movable":true,"basis":"user"},
+  {"id":"catalog-rug","name":"Woven ivory rug","kind":"rug","position":[1.95,6.75,0.008],"dimensions":[2.40,1.70,0.016],"rotation":0,"color":"#c5bba5","movable":true,"basis":"user"}
+]
