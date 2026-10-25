@@ -19,6 +19,7 @@ import type {
   WorkflowState,
 } from '../shared/types.js';
 import { verifyScene, suggestRepair, createStressTest } from '../shared/verification.js';
+import { addMissingLevels } from '../shared/scene-upgrade.js';
 import { askArgon, configured, modelName, safeError } from './argon.js';
 import { collectEvidence, validateListing } from './evidence.js';
 import { buildBlender, renderPathForModel } from './blender.js';
@@ -134,6 +135,35 @@ if (!state.events.length) {
     });
   } catch {}
 }
+const upgradedScene = addMissingLevels(state.scene, initial);
+if (upgradedScene) {
+  await fs.mkdir('runtime', { recursive: true });
+  await fs.writeFile(
+    'runtime/before-upper-floor-' + state.scene.revision + '.json',
+    JSON.stringify(state, null, 2),
+  );
+  state.scene = upgradedScene;
+  state.modelUrl = null;
+  state.workflow ??= emptyWorkflow();
+  if (state.workflow.plan) state.workflow.plan = normalizePlan(state.workflow.plan, upgradedScene);
+  state.workflow.phase = 'needs-review';
+  state.lastAction =
+    'Added the source-traced second floor. Your existing furniture is preserved; a fresh two-floor render is needed.';
+  event(
+    'structure',
+    'Add second floor',
+    'done',
+    'Upper rooms traced from the listing plan; floor height and vertical alignment are inferred. Existing furniture preserved.',
+  );
+}
+if (state.scene.rooms.some((room) => room.floorZ > 0)) {
+  state.scene.levels = structuredClone(initial.levels);
+  state.scene.notes = state.scene.notes.map((note) =>
+    note.startsWith('Stair direction anchor:')
+      ? initial.notes.find((entry) => entry.startsWith('Stair direction anchor:')) || note
+      : note,
+  );
+}
 if (state.modelUrl) {
   try {
     await fs.access(path.join('public', state.modelUrl.split('?')[0]));
@@ -141,7 +171,7 @@ if (state.modelUrl) {
     state.modelUrl = null;
   }
 }
-if (!state.modelUrl)
+if (!state.modelUrl && !upgradedScene)
   try {
     await fs.access('public/generated/brannan.glb');
     state.modelUrl = '/generated/brannan.glb?v=' + Date.now();
@@ -172,6 +202,7 @@ function save(): Promise<void> {
   saveQueue = pending;
   return pending;
 }
+if (upgradedScene) await save();
 function snapshot() {
   return structuredClone({
     scene: state.scene,
@@ -242,7 +273,7 @@ function applyPatches(scene: SceneSpec, patches: PlacementPatch[]): SceneSpec {
     const o = next.objects.find((o) => o.id === patch.objectId);
     if (!o?.movable || o.pinned) continue;
     const pos = checkedVector(patch.position);
-    if (pos) o.position = [pos[0], pos[1], o.dimensions[2] / 2];
+    if (pos) o.position = [pos[0], pos[1], o.position[2]];
     if (typeof patch.rotation === 'number' && Number.isFinite(patch.rotation))
       o.rotation = patch.rotation;
     if (typeof patch.color === 'string' && /^#[0-9a-f]{6}$/i.test(patch.color))
@@ -290,7 +321,11 @@ const compact = (scene: SceneSpec) =>
 function improves(before: Verification, after: Verification) {
   if (
     before.routes.some(
-      (route) => route.passed && !after.routes.find((r) => r.targetId === route.targetId)?.passed,
+      (route) =>
+        route.passed &&
+        !after.routes.find(
+          (r) => r.targetId === route.targetId && (r.floorZ || 0) === (route.floorZ || 0),
+        )?.passed,
     )
   )
     return false;
@@ -323,7 +358,7 @@ async function repairCurrent() {
   const answer = await call<{ patches: PlacementPatch[]; summary: string }>(
     'repair',
     'Placement repair',
-    'You are Listing2Living layout repair agent. Correct the actual failures while preserving fixed/pinned objects, furniture dimensions, room geometry and floor Z=0. Canonical metres XY floor, Z up, object position is CENTER and rotation radians. Only move existing movable objects, ideally into living room away from stairs. Return {patches:[{objectId,position:[x,y,z],rotation}],summary}.\nScene: ' +
+    "You are Listing2Living layout repair agent. Correct the actual failures while preserving fixed/pinned objects, furniture dimensions, room geometry and each object's current floor elevation. Canonical metres XY floor, Z up, object position is CENTER and rotation radians. Only move existing movable objects, staying on their current floor, away from stairs. Upper floor has floorZ=2.85; never drop its items to ground level. Return {patches:[{objectId,position:[x,y,z],rotation}],summary}.\nScene: " +
       compact(before) +
       '\nFailures: ' +
       JSON.stringify(beforeChecks),
@@ -392,10 +427,10 @@ async function build(url: string) {
   const planRaw = await call<any>(
     'surveyor',
     'Floor-plan interpreter',
-    'Interpret the supplied floor plan for this lower floor. Return {summary,rooms:[{roomId,name,width,depth,ceilingHeight,dimensionBasis:"plan"|"inferred",confidence:"high"|"medium"|"low",evidence}],scaleNote,uncertainties:[string]}. Dimensions must be numeric METRES; read printed labels rather than inventing measurements. Ceiling height is inferred. Room IDs must match the supplied seed. Source-traced footprint is an existing event-created approximation and will remain the construction seed. Listing total1420sqft versus plan1379total/434lower must remain an unresolved source discrepancy.\nScene seed:' +
+    'Interpret BOTH floors in the supplied plan. Return {summary,rooms:[{roomId,name,width,depth,ceilingHeight,dimensionBasis:"plan"|"inferred",confidence:"high"|"medium"|"low",evidence}],scaleNote,uncertainties:[string]}. Dimensions must be numeric METRES; read printed labels rather than inventing measurements. Ceiling height and vertical floor alignment are inferred. Room IDs must match the supplied seed, including upstairs bedrooms, hallway, bathroom, laundry and closets. Source-traced footprint is an existing event-created approximation and will remain the construction seed. Listing total1420sqft versus plan1379total/434lower/945upper must remain an unresolved source discrepancy.\nScene seed:' +
       compact(scene),
     sourcePaths('plan').slice(0, 1),
-    4000,
+    6500,
   );
   const plan = normalizePlan(planRaw, scene);
   state.workflow.plan = plan;
@@ -444,9 +479,9 @@ async function build(url: string) {
   const [assets, structure, openings, appearance] = results.map(
     (r) => (r as PromiseFulfilledResult<any>).value,
   );
-  scene.rooms.forEach((r) => (r.ceilingHeight = structure.ceilingHeight));
+  // Preserve the inferred floor/stair alignment; a proposed ceiling height is evidence for review.
+  scene.notes.push(...structure.notes.slice(0, 3));
   scene.walls.forEach((w) => {
-    w.height = structure.ceilingHeight;
     w.color = appearance.wallColor;
   });
   scene.objects
@@ -489,7 +524,7 @@ async function inspectScene(scene: SceneSpec, image: string): Promise<VisualAsse
   const raw = await call<any>(
     'visual',
     'Rendered scene critic',
-    'The first image is a fresh rendered scene; subsequent images are source photos and then the source floor plan if present. Scope is the lower-floor entry, kitchen, living area and stair approach; upstairs is outside this prototype. Record missing bathroom/closet photo evidence as a limitation. Inspect layout, approved object presence/scale, and material resemblance. Suggested staging objects intentionally differ from empty source photos: do not penalize their existence. Compare architecture to sources, objects to their current scene dimensions and finishes, accounting for camera mismatch. Stair bottom/top fields, when present, are explicit XY endpoints of the generated stair: bottom is lower, top is higher. Cross-check those endpoints before alleging reversed ascent; do not infer compass direction from image left/right. If the perspective is inconclusive, label uncertainty. Return {summary,scores:{layout:0..100,objects:0..100,materials:0..100},evidenceSufficient:boolean,findings:[{category:"placement"|"appearance"|"structure"|"evidence",severity:"major"|"minor",message,objectIds:[string],recommendation}]}. Scores are provisional model judgments;70 is a demo review threshold, NOT measured reconstruction accuracy or safety certification. Report unavailable evidence explicitly. Structural/source contradictions require human review. Scene:' +
+    'The first image is a fresh rendered scene; subsequent images are source photos and then the source floor plan if present. Scope includes both floors. The plan supports upper bedrooms, hallway, bathroom, laundry and closets, but current source interior photos primarily show downstairs. Judge upstairs topology against the floor plan; do not claim upstairs material fidelity or full-house photo verification when upstairs photos are absent. Record missing upper-floor, bathroom and closet photo evidence as a limitation. A single current view may show only one floor; do not mark offscreen approved items missing. Inspect layout, approved object presence/scale, and material resemblance. Suggested staging objects intentionally differ from empty source photos: do not penalize their existence. Compare architecture to sources, objects to their current scene dimensions and finishes, accounting for camera mismatch. Stair bottom/top fields, when present, are explicit XY endpoints of the generated stair: bottom is lower, top is higher. Cross-check those endpoints before alleging reversed ascent; do not infer compass direction from image left/right. If the perspective is inconclusive, label uncertainty. Return {summary,scores:{layout:0..100,objects:0..100,materials:0..100},evidenceSufficient:boolean,findings:[{category:"placement"|"appearance"|"structure"|"evidence",severity:"major"|"minor",message,objectIds:[string],recommendation}]}. Scores are provisional model judgments;70 is a demo review threshold, NOT measured reconstruction accuracy or safety certification. Report unavailable evidence explicitly. Structural/source contradictions require human review. Scene:' +
       compact(scene) +
       ' Checks:' +
       JSON.stringify(checks) +
@@ -711,7 +746,16 @@ async function visualRepair() {
   await save();
 }
 
-async function furnish(prompt: string) {
+function requestedFloor(value: unknown): number {
+  const floorZ = value === undefined ? 0 : Number(value);
+  if (
+    !Number.isFinite(floorZ) ||
+    !state.scene.rooms.some((room) => Math.abs(room.floorZ - floorZ) < 0.01)
+  )
+    throw new Error('Choose an available floor.');
+  return floorZ;
+}
+async function furnish(prompt: string, floorZ = 0) {
   if (!prompt.trim()) throw new Error('Describe what you want to change.');
   checkpoint();
   const answer = await call<{
@@ -723,8 +767,11 @@ async function furnish(prompt: string) {
     'Furnishing planner',
     'You furnish an existing home in response to a real user request. Metres, floorXY,Zup, positions CENTER, rotations radians. Do not change architecture or fixed objects. Allowed furniturecatalog:' +
       JSON.stringify(catalog) +
-      '. Use livingspace avoid stairs and keep requested routes clear. Return {additions:[{kind,position:[x,y,z],rotation,color}],patches:[{objectId,position,rotation}],summary:string}. Add requestedobjects only; if already present edit instead of duplicate. Current scene:' +
+      '. Use the rooms at the selected floor elevation, avoid stairs and keep requested routes clear. Return {additions:[{kind,position:[x,y,z],rotation,color}],patches:[{objectId,position,rotation}],summary:string}. Add requestedobjects only; if already present edit instead of duplicate. Current scene:' +
       compact(state.scene) +
+      '\nSelected floor elevation: ' +
+      floorZ +
+      ". Add new furniture on this floor, with center Z equal to floor elevation plus half item height. Preserve each existing item's floor." +
       '\nUser request:' +
       prompt,
     [],
@@ -737,7 +784,7 @@ async function furnish(prompt: string) {
     const o = structuredClone(template);
     o.id = 'furniture-' + o.kind + '-' + randomUUID().slice(0, 6);
     const p = checkedVector(add.position);
-    if (p) o.position = [p[0], p[1], o.dimensions[2] / 2];
+    o.position = [p?.[0] ?? o.position[0], p?.[1] ?? o.position[1], floorZ + o.dimensions[2] / 2];
     if (Number.isFinite(add.rotation)) o.rotation = add.rotation!;
     if (/^#[0-9a-f]{6}$/i.test(add.color || '')) o.color = add.color!;
     next.objects.push(o);
@@ -834,7 +881,9 @@ backgroundJob('/api/visual-repair', () => {
     throw new Error('The two-attempt visual repair limit has been reached.');
   return visualRepair;
 });
-mutation('/api/furnish', (body) => furnish(String(body.prompt || '').slice(0, 1500)));
+mutation('/api/furnish', (body) =>
+  furnish(String(body.prompt || '').slice(0, 1500), requestedFloor(body.floorZ)),
+);
 mutation('/api/verify', () => {
   state.verification = verifyScene(state.scene);
   state.lastAction = state.verification.passed
@@ -877,9 +926,44 @@ mutation('/api/add', (body) => {
   checkpoint();
   const next = structuredClone(state.scene);
   const object = structuredClone(template);
+  const floorZ = requestedFloor(body.floorZ);
+  if (floorZ > 0) {
+    const room =
+      next.rooms.find((room) => room.floorZ === floorZ && /bedroom/i.test(room.name)) ||
+      next.rooms.find((room) => room.floorZ === floorZ)!;
+    const xs = room.polygon.map((p) => p[0]),
+      ys = room.polygon.map((p) => p[1]);
+    object.position = [
+      (Math.min(...xs) + Math.max(...xs)) / 2,
+      (Math.min(...ys) + Math.max(...ys)) / 2,
+      floorZ + object.dimensions[2] / 2,
+    ];
+  }
   object.id = 'furniture-' + object.kind + '-' + randomUUID().slice(0, 6);
   next.objects.push(object);
   commit(next, object.name + ' added.');
+});
+backgroundJob('/api/rebuild', () => {
+  if (!state.workflow?.approvalMode)
+    throw new Error('Approve your item selection before generating the scene.');
+  return async () => {
+    event(
+      'blender',
+      'Build both floors',
+      'running',
+      'Rebuilding the current approved arrangement with the source-traced upper floor.',
+    );
+    state.modelUrl = await buildBlender(state.scene);
+    state.verification = verifyScene(state.scene);
+    state.workflow!.phase = 'needs-review';
+    state.lastAction = 'Both floors rebuilt. The new geometry needs a fresh visual review.';
+    event(
+      'blender',
+      'Build both floors',
+      'done',
+      'Fresh Blender model and render published; current furniture preserved.',
+    );
+  };
 });
 mutation('/api/remove', (body) => {
   const o = state.scene.objects.find((o) => o.id === body.objectId);

@@ -5,6 +5,7 @@ import type { SceneObject, SceneSpec } from '../shared/types.js';
 import {
   approveAssets,
   emptyWorkflow,
+  hasRouteRegression,
   normalizeAssessment,
   normalizePlan,
   proposalSet,
@@ -181,4 +182,78 @@ test('structural findings cannot disappear through a movable-only repair', () =>
   assert.equal(retained.status, 'needs-repair');
   assert.equal(retained.findings[0].category, 'structure');
   assert.equal(visualImproved(before, retained), false);
+});
+
+test('upper-floor photo proposals and dimension approval preserve the original floor', () => {
+  const upperScene = structuredClone(scene);
+  upperScene.rooms.push({ ...upperScene.rooms[0], id: 'test-upper', floorZ: 2.85 });
+  upperScene.sources.push({
+    id: 'test-upper-photo',
+    label: 'Upper view',
+    url: 'https://example.com/test.jpg',
+    kind: 'photo',
+  });
+  const raw = {
+    ...assets()[0],
+    id: 'upper-sofa',
+    origin: 'photo',
+    sourceIds: ['test-upper-photo'],
+    position: [1.25, 7.3, 2.85 + 0.42],
+  };
+  const proposed = proposalSet({ assets: [raw] }, upperScene, catalog);
+  const flow = { ...emptyWorkflow(), phase: 'awaiting-approval' as const, assets: proposed };
+  const approved = approveAssets(upperScene, flow, {
+    mode: 'reviewed',
+    items: [{ id: 'proposal-upper-sofa', selected: true, dimensions: [1.8, 0.8, 1.0] }],
+  });
+  const upper = approved.scene.objects.find((o) => o.id === 'proposal-upper-sofa')!;
+  assert.equal(upper.position[2], 3.35);
+  assert.equal(upper.position[2] - upper.dimensions[2] / 2, 2.85);
+});
+
+test('route regression distinguishes duplicate destination IDs on different floors', () => {
+  const checked = verifyScene(scene);
+  const base = { targetId: 'same-id', label: 'Destination', points: [], length: 0 };
+  const before = {
+    ...checked,
+    routes: [
+      { ...base, floorZ: 0, passed: true },
+      { ...base, floorZ: 2.85, passed: false },
+    ],
+  };
+  const after = {
+    ...checked,
+    routes: [
+      { ...base, floorZ: 2.85, passed: true },
+      { ...base, floorZ: 0, passed: false },
+    ],
+  };
+  assert.equal(hasRouteRegression(before, after), true);
+});
+
+test('verified upper printed extents remain source-backed without certifying polygon vertices', () => {
+  const plan = normalizePlan(
+    {
+      summary: 'Upper floor',
+      rooms: [
+        {
+          roomId: 'upper-bedroom-west',
+          name: 'West bedroom',
+          width: 3.175,
+          depth: 7.8486,
+          ceilingHeight: 2.65,
+          dimensionBasis: 'plan',
+          confidence: 'high',
+          evidence: 'Printed 10 ft 5 in by25 ft9 in label.',
+        },
+      ],
+      scaleNote: 'Metres',
+      uncertainties: [],
+    },
+    scene,
+  );
+  const bedroom = plan.rooms.find((room) => room.roomId === 'upper-bedroom-west')!;
+  assert.equal(bedroom.dimensionBasis, 'plan');
+  assert.match(bedroom.evidence, /nonrectangular/);
+  assert.match(bedroom.evidence, /vertices remain approximate/);
 });

@@ -27,6 +27,7 @@ def arguments():
     parser.add_argument('--out', required=True)
     parser.add_argument('--skip-render', action='store_true')
     parser.add_argument('--keep-session', action='store_true')
+    parser.add_argument('--camera', default='living')
     return parser.parse_args(args)
 
 
@@ -44,6 +45,7 @@ ARCHITECTURE = []
 FURNITURE = []
 FURNITURE_ROOTS = []
 CURRENT_MOVABLE = None
+CURRENT_FLOOR_Z = 0.0
 
 
 def material(name, hex_color, roughness=0.6, metal=0):
@@ -61,6 +63,7 @@ def material(name, hex_color, roughness=0.6, metal=0):
 
 
 def tag(obj, scene_id, role, basis='inferred'):
+    obj['floorZ'] = float(CURRENT_FLOOR_Z)
     if CURRENT_MOVABLE is not None:
         obj['sceneId'] = CURRENT_MOVABLE['id']
         obj['role'] = 'furniture-' + role
@@ -135,15 +138,21 @@ def clip_axis(poly, axis, threshold, keep_greater):
 
 
 def floors(scene):
+    global CURRENT_FLOOR_Z
     random.seed(114)
     wood_colors = ['#713522', '#81402a', '#934b2e', '#9c5736', '#6b3020', '#8b422a', '#a45938', '#793823']
     woods = [material(f'Oiled cherry floor {i}', c, 0.34) for i, c in enumerate(wood_colors)]
     tile = material('Bathroom porcelain', '#b8b6a8', 0.6)
     for room in scene['rooms']:
+        CURRENT_FLOOR_Z = float(room.get('floorZ', 0))
         p = room['polygon']
-        polygon('floor-base-' + room['id'], p, -0.015, material('Floor edge', '#70482f'), room['id'])
-        if room['id'] == 'bathroom':
-            polygon('bathroom-floor', p, 0, tile, room['id'])
+        # Keep upper surfaces just above the lower ceiling, avoiding coplanar
+        # faces while leaving the actual stair void open in both surfaces.
+        surface_z = CURRENT_FLOOR_Z + (.008 if CURRENT_FLOOR_Z > 0 else 0)
+        base_z = CURRENT_FLOOR_Z + (.004 if CURRENT_FLOOR_Z > 0 else -.015)
+        polygon('floor-base-' + room['id'], p, base_z, material('Floor edge', '#70482f'), room['id'])
+        if 'bathroom' in room['id'] or 'laundry' in room['id']:
+            polygon(room['id'] + '-tile-floor', p, surface_z, tile, room['id'])
             continue
         xmin, xmax = min(v[0] for v in p), max(v[0] for v in p)
         ymin, ymax = min(v[1] for v in p), max(v[1] for v in p)
@@ -157,11 +166,12 @@ def floors(scene):
                 for ax, threshold, greater in [(0, x0, True), (0, x1, False), (1, y0 + .001, True), (1, y1 - .001, False)]:
                     pp = clip_axis(pp, ax, threshold, greater)
                 if len(pp) >= 3:
-                    polygon(f'board-{room["id"]}-{col}-{row}', pp, 0, random.choice(woods), room['id'])
+                    polygon(f'board-{room["id"]}-{col}-{row}', pp, surface_z, random.choice(woods), room['id'])
                 y0, row = y1, row + 1
 
 
 def walls(scene):
+    global CURRENT_FLOOR_Z
     trim = material('Painted trim', '#f2f0e9', .55)
     steel = material('Window aluminium', '#c4c9c7', .28, .65)
     glass = material('Window pale blue glass', '#abc8ce', .19, .05)
@@ -169,6 +179,8 @@ def walls(scene):
     p = glass.node_tree.nodes.get('Principled BSDF')
     p.inputs['Alpha'].default_value = .22
     for wall in scene['walls']:
+        CURRENT_FLOOR_Z = float(wall.get('floorZ', 0))
+        floor_z = CURRENT_FLOOR_Z
         a, b = Vector(wall['start']), Vector(wall['end'])
         length = (b - a).length
         direction = (b - a).normalized()
@@ -180,7 +192,7 @@ def walls(scene):
             if end - start < .001 or top - bottom < .001:
                 return
             xy = a + direction * ((start + end) / 2)
-            box(wall['id'] + '-' + suffix, (xy.x, xy.y, (bottom + top) / 2),
+            box(wall['id'] + '-' + suffix, (xy.x, xy.y, floor_z + (bottom + top) / 2),
                 (end - start, wall['thickness'], top - bottom), mat, wall['id'], 'wall', angle, .004)
 
         cursor = 0
@@ -192,7 +204,7 @@ def walls(scene):
             segment(left, right, opening['bottom'] + opening['height'], wall['height'], opening['id'] + '-lintel')
             if opening['type'] == 'window':
                 mid = a + direction * opening['offset']
-                z0, z1 = opening['bottom'], opening['bottom'] + opening['height']
+                z0, z1 = floor_z + opening['bottom'], floor_z + opening['bottom'] + opening['height']
                 box(opening['id'] + '-glass', (mid.x, mid.y, (z0 + z1) / 2),
                     (opening['width'] - .07, .018, opening['height'] - .07), glass, opening['id'], 'window', angle, 0)
                 for height in [z0, z0 + opening['height'] * .68, z1]:
@@ -210,18 +222,18 @@ def walls(scene):
                 # to test passage through a closed door or door-swing clearance.
                 mid = a + direction * opening['offset']
                 door = material('Dark entry door', '#242621', .4)
-                box('front-door-leaf', (mid.x, mid.y, opening['height'] / 2),
+                box('front-door-leaf', (mid.x, mid.y, floor_z + opening['height'] / 2),
                     (opening['width'] - .035, .045, opening['height'] - .025),
                     door, wall['id'], 'wall-trim', angle, .006)
                 for edge in [left - .015, right + .015]:
                     pt = a + direction * edge
-                    box('front-door-frame', (pt.x, pt.y, opening['height'] / 2),
+                    box('front-door-frame', (pt.x, pt.y, floor_z + opening['height'] / 2),
                         (.055, .08, opening['height'] + .04), trim, wall['id'], 'wall-trim', angle)
                 pt = a + direction * (right - .12)
-                box('front-door-lock', (pt.x, pt.y + .037, 1.0), (.04, .025, .16), steel,
+                box('front-door-lock', (pt.x, pt.y + .037, floor_z + 1.0), (.04, .025, .16), steel,
                     wall['id'], 'wall-trim', angle, .005)
-                beam('front-door-handle', (pt.x, pt.y + .07, 1.02),
-                     (pt.x - .10, pt.y + .07, 1.02), .012, steel, wall['id'], 'wall-trim')
+                beam('front-door-handle', (pt.x, pt.y + .07, floor_z + 1.02),
+                     (pt.x - .10, pt.y + .07, floor_z + 1.02), .012, steel, wall['id'], 'wall-trim')
             cursor = right
         segment(cursor, length, 0, wall['height'], 'last')
         # Baseboards follow solid floor segments and preserve door openings.
@@ -234,7 +246,7 @@ def walls(scene):
             if hi <= lo:
                 continue
             mid = a + direction * ((lo + hi) / 2)
-            box(f'{wall["id"]}-baseboard-{k}', (mid.x, mid.y, .065),
+            box(f'{wall["id"]}-baseboard-{k}', (mid.x, mid.y, floor_z + .065),
                 (hi - lo, wall['thickness'] + .028, .13), trim, wall['id'], 'wall-trim', angle, .003)
 
 
@@ -283,11 +295,13 @@ def cabinet_details(obj):
 
 
 def objects(scene):
+    global CURRENT_FLOOR_Z
     steel = material('Brushed steel', '#b5b9b8', .25, .8)
     black = material('Appliance black', '#232928', .25, .4)
     for obj in scene['objects']:
         if obj.get('movable'):
             continue
+        CURRENT_FLOOR_Z = float(obj['position'][2] - obj['dimensions'][2] / 2)
         if obj['kind'] in ['counter', 'cabinet']:
             cabinet_details(obj)
         else:
@@ -303,6 +317,7 @@ def objects(scene):
     # Recognizable cooking fixtures, all tied to the fixed counter semantic ID.
     east = next((o for o in scene['objects'] if o['id'] == 'kitchen-counter-east'), None)
     if east:
+        CURRENT_FLOOR_Z = float(east['position'][2] - east['dimensions'][2] / 2)
         x, y, _ = east['position']
         sid = east['id']
         box('oven-front', (x - .34, y + .14, .44), (.04, .62, .72), black, sid, 'fixed-detail')
@@ -323,7 +338,7 @@ def movable_furniture(scene):
     under the canonical position/rotation. Backrests face canonical +Y, matching
     the browser's generated asset convention. Decorations stay within bounds.
     """
-    global CURRENT_MOVABLE
+    global CURRENT_MOVABLE, CURRENT_FLOOR_Z
     wood = material('Furniture natural oak', '#a48158', .55)
     dark = material('Furniture charcoal legs', '#393e38', .44, .25)
     for obj in scene['objects']:
@@ -334,6 +349,7 @@ def movable_furniture(scene):
         if min(w, d, h) <= 0:
             raise ValueError('Movable object dimensions must be positive: ' + sid)
         CURRENT_MOVABLE = obj
+        CURRENT_FLOOR_Z = float(obj['position'][2] - h / 2)
         first_mesh = len(FURNITURE)
         root = bpy.data.objects.new(sid, None)
         bpy.context.collection.objects.link(root)
@@ -344,6 +360,7 @@ def movable_furniture(scene):
         root['dimensions'] = [w, d, h]
         root['basis'] = obj.get('basis', 'inferred')
         root['fixed'] = False
+        root['floorZ'] = CURRENT_FLOOR_Z
         FURNITURE_ROOTS.append(root)
         finish = material('Furniture finish ' + obj['color'], obj['color'], .77 if obj['kind'] in ['sofa', 'chair', 'rug'] else .45)
         bottom = -h / 2
@@ -449,12 +466,14 @@ def movable_furniture(scene):
 
 
 def stairs(scene):
+    global CURRENT_FLOOR_Z
     metal = material('Stair powder-coated steel', '#9da09a', .48, .45)
     dark = material('Stair dark handrail', '#333b39', .35, .5)
     for stair in scene['stairs']:
         sid = stair['id']
         x, y, z = stair['position']
         width, run, rise = stair['dimensions']
+        CURRENT_FLOOR_Z = float(z - rise / 2)
         n = stair['steps']
         # In this source the stair foot faces the north/window; rise runs toward kitchen.
         for i in range(n):
@@ -479,7 +498,31 @@ def stairs(scene):
             beam(f'{sid}-mesh-{j}', (left, yy, zz + .08), (left, yy, zz + .84), .006, metal, sid, 'stair-rail')
 
 
+def upper_edge_protection(scene):
+    """Protect the open landing edge without closing the stair exit.
+
+    Position and rail detail are inferred. The source plan establishes the shaft;
+    this is a visible schematic guard, not a certified building-code detail.
+    """
+    global CURRENT_FLOOR_Z
+    if not any(r['id'] == 'upper-hall' for r in scene['rooms']):
+        return
+    CURRENT_FLOOR_Z = 2.85
+    metal = material('Upper landing guard', '#626b68', .45, .5)
+    for side, a, b in [
+        ('north', (3.30, 7.82), (4.38, 7.82)),
+    ]:
+        for i in range(9):
+            t = i / 8
+            x, y = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+            beam('upper-guard-' + side + '-' + str(i), (x, y, 2.85),
+                 (x, y, 3.85), .014, metal, 'upper-hall', 'guard-rail')
+        beam('upper-guard-' + side + '-top', (*a, 3.85), (*b, 3.85),
+             .026, metal, 'upper-hall', 'guard-rail')
+
+
 def ceilings(scene):
+    global CURRENT_FLOOR_Z
     concrete = material('Exposed concrete', '#989b94', .95)
     nodes, links = concrete.node_tree.nodes, concrete.node_tree.links
     # Deterministic procedural aggregate texture, embedded in GLB so the browser
@@ -509,17 +552,27 @@ def ceilings(scene):
     links.new(texture.outputs['Color'], bump.inputs['Height'])
     links.new(bump.outputs['Normal'], nodes.get('Principled BSDF').inputs['Normal'])
     for room in scene['rooms']:
+        CURRENT_FLOOR_Z = float(room.get('floorZ', 0))
         p = room['polygon']
         if room['id'] == 'living':
-            # Keep the stairwell open. This is an inferred upper slab footprint.
-            p = [[0, 5.16], [3.40, 5.16], [3.40, 7.82], [4.24, 7.82], [4.24, 8.49], [0, 8.49]]
-        obj = polygon('ceiling-' + room['id'], p, room['ceilingHeight'], concrete, room['id'], 'ceiling')
+            # Match the upper room union's physical stair void. Camera traversal
+            # must not pass through an otherwise invisible opaque lower ceiling.
+            p = [[0, 5.16], [4.24, 5.16], [4.24, 5.30], [3.30, 5.30],
+                 [3.30, 7.82], [4.24, 7.82], [4.24, 8.49], [0, 8.49]]
+        finish = concrete if CURRENT_FLOOR_Z < .1 else material('Inferred upper ceiling paint', '#deddd5', .85)
+        obj = polygon('ceiling-' + room['id'], p, CURRENT_FLOOR_Z + room['ceilingHeight'], finish, room['id'], 'ceiling')
         obj['isCeiling'] = True
+    if any(r['id'] == 'upper-hall' for r in scene['rooms']):
+        CURRENT_FLOOR_Z = 2.85
+        obj = polygon('ceiling-upper-stair-shaft', [[3.30, 5.30], [4.38, 5.30], [4.38, 7.92], [3.30, 7.92]],
+                      5.50, material('Inferred upper ceiling paint', '#deddd5', .85), 'upper-hall', 'ceiling')
+        obj['isCeiling'] = True
+    CURRENT_FLOOR_Z = 0
     white = material('Soffit paint', '#eeeae0', .8)
     box('kitchen-soffit', (2.80, 3.24, 2.65), (2.86, 1.65, .18), white, 'kitchen', 'ceiling')
 
 
-def lighting_and_camera(scene):
+def lighting_and_camera(scene, camera_id='living'):
     world = bpy.data.worlds.new('Daylight world')
     world.use_nodes = True
     world.node_tree.nodes['Background'].inputs[0].default_value = (.75, .82, .92, 1)
@@ -539,10 +592,19 @@ def lighting_and_camera(scene):
     area('Soft daylight fill', (.7, 5.7, 2.6), (2.5, 4.1, .2), 65, 2.8, (1, .96, .90))
     area('Kitchen ceiling', (2.70, 3.8, 2.55), (2.7, 3.8, .1), 70, 1.8, (1, .96, .90))
     area('Entry ceiling', (.80, 1.6, 2.65), (.8, 1.6, 0), 40, 1.5, (1, .96, .90))
+    if any(r['id'] == 'upper-hall' for r in scene['rooms']):
+        area('Upper west daylight', (1.80, 8.30, 4.60), (1.7, 3.8, 3.2), 210, 1.8, (.94, .97, 1))
+        area('Upper east daylight', (7.5, 8.45, 4.60), (7.0, 4.0, 3.2), 210, 1.8, (.94, .97, 1))
+        for label, x, y, power in [('west', 1.5, 4.9, 65), ('east', 7.4, 5.0, 65),
+                                  ('hall', 3.84, 3.5, 65), ('bath', 3.15, 1.6, 40),
+                                  ('west-closet', 1.8, -.9, 45), ('east-closet', 7.4, 1.2, 40)]:
+            area('Upper ' + label + ' fill', (x, y, 5.22), (x, y, 2.9), power, 1.4, (1, .96, .90))
     camera = bpy.data.cameras.new('Reference camera')
     cam = bpy.data.objects.new('Reference camera', camera)
     bpy.context.collection.objects.link(cam)
-    preset = next((p for p in scene['cameras'] if p['id'] == 'living'), scene['cameras'][0])
+    preset = next((p for p in scene['cameras'] if p['id'] == camera_id), None)
+    if preset is None:
+        raise ValueError('Unknown camera preset: ' + camera_id)
     cam.location = preset['position']
     cam.rotation_euler = (Vector(preset['target']) - cam.location).to_track_quat('-Z', 'Y').to_euler()
     # Match the browser's interior camera independently of render aspect ratio.
@@ -572,8 +634,9 @@ def main():
     objects(scene)
     movable_furniture(scene)
     stairs(scene)
+    upper_edge_protection(scene)
     ceilings(scene)
-    camera = lighting_and_camera(scene)
+    camera = lighting_and_camera(scene, args.camera)
     bs = bpy.context.scene
     bs.unit_settings.system = 'METRIC'
     bs.render.engine = 'CYCLES'
@@ -609,7 +672,10 @@ def main():
         'furnitureMeshCount': len(FURNITURE),
         'furnitureIncludedInBlend': True,
         'furnitureIncludedInRender': not args.skip_render,
-        'renderCamera': 'living', 'elapsedSeconds': round(time.time() - start, 2),
+        'renderCamera': args.camera,
+        'levels': scene.get('levels', [{'id': 'main', 'label': 'Main floor', 'floorZ': 0}]),
+        'allMeshesHaveFloorZ': all('floorZ' in o for o in ARCHITECTURE + FURNITURE),
+        'elapsedSeconds': round(time.time() - start, 2),
         'assumptions': scene.get('notes', [])
     }
     (out / 'build-report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')

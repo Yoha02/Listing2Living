@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { objectFloorZ } from '../shared/verification.js';
 import type {
   AssetProposal,
   PlanInterpretation,
@@ -115,6 +116,11 @@ export function normalizePlan(raw: unknown, scene: SceneSpec): PlanInterpretatio
     living: [4.2418, 3.302],
     kitchen: [2.8956, 2.5146],
     bathroom: [2.1336, 2.7432],
+    'upper-bedroom-west': [3.175, 7.8486],
+    'upper-bedroom-east': [4.191, 6.477],
+    'upper-bathroom': [2.0574, 2.54],
+    'upper-closet-east': [3.1496, 2.0574],
+    'upper-closet-west': [4.5466, 2.8194],
   };
   const seen = new Set<string>();
   for (const room of plan.rooms) {
@@ -133,6 +139,9 @@ export function normalizePlan(raw: unknown, scene: SceneSpec): PlanInterpretatio
         ' These dimensions do not match a verified printed plan label and remain estimates.';
     }
     room.evidence += ' Ceiling height is inferred, not a printed plan measurement.';
+    if (['upper-bedroom-west', 'upper-closet-west'].includes(room.roomId))
+      room.evidence +=
+        ' Printed dimensions describe extents of a nonrectangular room; traced polygon vertices remain approximate.';
   }
   for (const room of scene.rooms)
     if (!seen.has(room.id)) {
@@ -170,10 +179,17 @@ export function proposalSet(
     seen.add(id);
     if (!candidate.sourceIds.length || candidate.sourceIds.some((id) => !photoIds.has(id)))
       throw new Error('A photo-derived asset must cite available source photos.');
+    const floorZ = objectFloorZ(scene, candidate);
+    if (floorZ === undefined)
+      throw new Error('A photo-derived asset must have its bottom at a modeled floor elevation.');
     observed.push({
       ...candidate,
       id,
-      position: [candidate.position[0], candidate.position[1], candidate.dimensions[2] / 2],
+      position: [
+        candidate.position[0],
+        candidate.position[1],
+        floorZ + candidate.dimensions[2] / 2,
+      ],
       selected: true,
     });
   }
@@ -226,8 +242,11 @@ export function approveAssets(
     if (edit) {
       asset.selected = edit.selected;
       if (edit.dimensions) {
+        const floorZ = objectFloorZ(scene, asset);
+        if (floorZ === undefined)
+          throw new Error('The proposed item is not assigned to a modeled floor.');
         asset.dimensions = [...edit.dimensions];
-        asset.position[2] = edit.dimensions[2] / 2;
+        asset.position[2] = floorZ + edit.dimensions[2] / 2;
         asset.dimensionReasoning += ' Dimensions confirmed or edited during user approval.';
       }
     }
@@ -236,12 +255,15 @@ export function approveAssets(
   if (body.mode === 'suggested' && selected.length !== 3)
     throw new Error('The suggested shortcut requires exactly three available suggestions.');
   next.objects = next.objects.filter((o) => !o.movable);
-  for (const asset of selected)
+  for (const asset of selected) {
+    const floorZ = objectFloorZ(scene, asset);
+    if (floorZ === undefined)
+      throw new Error('The approved item is not assigned to a modeled floor.');
     next.objects.push({
       id: asset.id,
       name: asset.name,
       kind: asset.kind,
-      position: [asset.position[0], asset.position[1], asset.dimensions[2] / 2],
+      position: [asset.position[0], asset.position[1], floorZ + asset.dimensions[2] / 2],
       dimensions: [...asset.dimensions],
       rotation: asset.rotation,
       color: asset.color,
@@ -249,6 +271,7 @@ export function approveAssets(
       pinned: false,
       basis: asset.origin === 'photo' ? 'photo' : 'user',
     });
+  }
   next.revision = scene.revision + 1;
   flow.approvedAssetIds = selected.map((a) => a.id);
   flow.approvalMode = body.mode;
@@ -298,7 +321,12 @@ export function normalizeAssessment(
 }
 export function hasRouteRegression(before: Verification, after: Verification): boolean {
   return before.routes.some(
-    (route) => route.passed && !after.routes.find((r) => r.targetId === route.targetId)?.passed,
+    (route) =>
+      route.passed &&
+      !after.routes.find(
+        (r) =>
+          r.targetId === route.targetId && Math.abs((r.floorZ || 0) - (route.floorZ || 0)) < 0.1,
+      )?.passed,
   );
 }
 export function visualImproved(before: VisualAssessment, after: VisualAssessment): boolean {

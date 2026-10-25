@@ -73,9 +73,11 @@ The approval screen shows room dimensions first, then a concise card per propose
 
 ## V1 scope
 
-Included: one supported listing, lower foyer/kitchen/living/stair base, source comparison, human approval, procedural furnishings, linked 2D/3D editor, live Argon calls, actual Blender assembly, route tests, bounded repair, revision-aware visual findings, scene export and saved local artifacts.
+Included: one supported listing, lower foyer/kitchen/living and upper bedrooms/hallway/bathroom/laundry/closets, source comparison, human approval, procedural furnishings, linked 2D/3D editor, live Argon calls, actual Blender assembly, floor-aware route tests, bounded repair, revision-aware visual findings, scene export and saved local artifacts. A level selector synchronizes plan and 3D view. First-person controls use WASD movement, arrow-key or mouse-drag look, and smooth stair elevation; Escape restores orbit controls.
 
-Deferred: arbitrary listing ingestion, multilevel navigation, exact real-estate measurement, photogrammetry, Gaussian splat training, retailer asset scraping, photorealistic object recovery, cloud hosting of Blender, and automatic structural renovation. These add substantial uncertainty without strengthening the core three-minute proof.
+Deferred: arbitrary listing ingestion, exact real-estate measurement, photogrammetry, Gaussian splat training, retailer asset scraping, photorealistic object recovery, cloud hosting of Blender, and automatic structural renovation. These add substantial uncertainty without strengthening the core three-minute proof.
+
+The second-floor extension preserves the saved lower-floor arrangement, adds source-traced rooms at an inferred 2.85 m elevation, invalidates old rendered-review freshness, and rebuilds the architectural artifact. Existing furniture edits and repairs preserve their original floor. Navigation checks are per level; they are not a certification of staircase safety or accessibility. Upstairs photo evidence is currently incomplete, so the critic must retain that limitation.
 
 ## Acceptance evidence
 

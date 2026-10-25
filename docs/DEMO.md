@@ -28,6 +28,6 @@ Show the URL/source evidence (5s), dimension-and-item approval (10s), generated 
 
 - **What did you build today?** The interface, shared scene format, Argon orchestration, approval gate, deterministic Blender builder, geometry checks and repair/review flow. Credit the existing libraries and tools.
 - **What is actually live?** The event stream identifies real Argon calls, Blender builds and geometry results. Sources can be cached and the traced footprint is a declared starter.
-- **Can it handle any listing?** V1 supports one adapter and one lower floor. General source ingestion and reconstruction are follow-on work.
+- **Can it handle any listing?** V1 supports one adapter and both source-traced floors. General source ingestion and reconstruction are follow-on work.
 - **How accurate is it?** Plan-derived dimensions have a source; height and furniture sizes include estimates. Visual scores are a provisional rubric. It is a planning aid, not a survey.
 - **Why Argon?** It reads the multimodal evidence, coordinates structured proposals and critiques the rendered result. The project demonstrates the More Dimensions render–inspect–repair loop rather than claiming a benchmark it has not measured.

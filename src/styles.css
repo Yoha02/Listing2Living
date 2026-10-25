@@ -3022,3 +3022,31 @@ button:active:not(:disabled) {
   color: #71865e;
   text-decoration: none;
 }
+.floor-selector {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  margin-bottom: 20px;
+  border: 1px solid #dedfd5;
+  border-radius: 10px;
+  background: #eeeee5;
+}
+.floor-selector button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 5px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #636d5e;
+  font-size: 11px;
+  cursor: pointer;
+}
+.floor-selector button.active {
+  background: #fffef8;
+  color: #345d4b;
+  box-shadow: 0 1px 4px #24352612;
+}

@@ -6,7 +6,7 @@
 & 'C:/Program Files/Blender Foundation/Blender 5.0/blender.exe' --background --python blender/build_scene.py -- --scene shared/brannan.json --out public/generated
 ```
 
-Use `--skip-render` for a quick geometry rebuild. The default reference render uses the `living` camera toward the kitchen and stairs, broadly corresponding to source `photo-1`; it includes every movable object supplied in the scene. Camera registration is approximate, not a calibrated photogrammetry solution.
+Use `--skip-render` for a quick geometry rebuild. The default reference render uses the `living` camera toward the kitchen and stairs, broadly corresponding to source `photo-1`; it includes every movable object supplied in the scene. Use `--camera upper-landing`, `upper-west-bedroom`, or `upper-east-bedroom` for an upper-floor reference. Camera registration is approximate, not a calibrated photogrammetry solution.
 
 Interior cameras use an explicit 67.3-degree vertical field of view in both Blender and the browser. Blender's vertical sensor fit keeps that angle stable across output aspect ratios; horizontal framing can still differ when the browser viewport has a different aspect ratio.
 
@@ -23,7 +23,8 @@ Furniture meshes are parented under the corresponding canonical object transform
 - Source units: metres, floor XY, Z up. All object and stair positions are bounding-box centers.
 - Wall openings use center distance from wall start. Geometry creates real openings from wall segments; no boolean dependency is required.
 - Blender's glTF exporter produces standard Y-up GLB, corresponding to Three.js `(x, z, -y)`. Do not rotate the exported scene a second time.
-- Each exported mesh carries `sceneId`, `role`, `basis`, and `fixed` extras. Several meshes can share one semantic sceneId.
+- Each exported mesh carries `sceneId`, `role`, `basis`, `fixed`, and numeric `floorZ` extras. Several meshes can share one semantic sceneId. Filter by `floorZ` for a selected-floor overview; preserve both levels while walking.
+- Wall bases, room surfaces, ceilings, openings, and trim follow their floor elevation. Opening heights remain relative to the wall base. Movable object centers already include their floor elevation.
 - Hide meshes with `role === 'ceiling'` for the dollhouse view. They can be restored in first-person views. Walls and trim are independently tagged for optional cutaway views.
 - Geometry-derived checks use canonical JSON, not decorative mesh triangles.
 
@@ -35,7 +36,9 @@ Four selected listing photographs inform the reddish timber floor, exposed concr
 
 The starter refrigerator was revised to an estimated 0.86 m width along the east wall after visual comparison showed the earlier 0.44 m placeholder was too narrow. Its adjacent cooking counter preserves the south-counter join. Concrete uses a small, deterministic generated aggregate texture embedded in GLB; the entry door and floor palette are also photo-informed appearance details. Lighting is controlled for legibility and is not a reconstruction of measured illumination. The closed entry door is decorative geometry: route checks begin inside the foyer and do not certify passage through that leaf or its swing.
 
-Ceiling height, wall thickness, stair rise/run, openings' vertical dimensions, appliance dimensions, material shades, and detailed cabinet divisions are estimates. This is a useful editable reconstruction, not a surveyed or code-certified model. Upstairs is outside the MVP. The source's 1,379 sq ft total and the listing's 1,420 sq ft remain an explicitly recorded disagreement.
+The second-floor plan adds two bedrooms, a hallway, bathroom, laundry, linen closet, and two walk-in closets. Its panel uses a different printed scale; it is registered approximately to the existing stair top at XY `[3.84,5.30]`. The second-floor elevation of 2.85 m and ceiling height of 2.65 m are inferred. Floor polygons and the lower ceiling preserve a physical stairwell void, so the stairs remain traversable between levels. An indicative guard protects the north edge. No upstairs photograph appearance has been verified; upstairs finishes are schematic.
+
+Ceiling height, wall thickness, stair rise/run, openings' vertical dimensions, appliance dimensions, material shades, and detailed cabinet divisions are estimates. This is a useful editable reconstruction, not a surveyed or code-certified model. The source's 1,379 sq ft total and the listing's 1,420 sq ft remain an explicitly recorded disagreement. Per-level route checks do not certify stair dimensions or headroom.
 
 ## Optional installed Blender MCP transport
 

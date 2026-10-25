@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import type { AppState, PlacementPatch, SceneObject, Source } from '../shared/types';
+import type { WalkerPose } from '../shared/navigation';
 import { PlanView } from './PlanView';
 import { SceneViewer, type ViewerHandle } from './SceneViewer';
 import { ApprovalDialog, VisualReviewPanel } from './WorkflowReview';
@@ -220,6 +221,11 @@ export default function App() {
     [compare, setCompare] = useState(false),
     [activeSource, setActiveSource] = useState<string>(''),
     [camera, setCamera] = useState('overview'),
+    [activeFloorZ, setActiveFloorZ] = useState(0),
+    [walking, setWalking] = useState(false),
+    [walkPose, setWalkPose] = useState<Pick<WalkerPose, 'position' | 'floorZ' | 'yaw'> | null>(
+      null,
+    ),
     [catalogSearch, setCatalogSearch] = useState(''),
     [help, setHelp] = useState(false),
     [notification, setNotification] = useState(''),
@@ -366,7 +372,17 @@ export default function App() {
     doneEvents = state.events.filter((e) => e.status === 'done' || e.status === 'cached').length;
   const setView = (id: string) => {
     setCamera(id);
+    const preset = scene.cameras.find((entry) => entry.id === id);
+    if (preset && id !== 'overview') setActiveFloorZ(preset.floorZ || 0);
     viewer.current?.view(id);
+  };
+  const levels = scene.levels || [{ id: 'lower', label: 'Main floor', floorZ: 0 }];
+  const currentLevel = levels.find((level) => level.floorZ === activeFloorZ) || levels[0];
+  const selectFloor = (floorZ: number) => {
+    setActiveFloorZ(floorZ);
+    setSelected(null);
+    setCamera('overview');
+    viewer.current?.level(floorZ);
   };
   const canInspect =
     !!state.workflow?.approvalMode &&
@@ -518,18 +534,36 @@ export default function App() {
             ))}
           </nav>
           <div className="rail-content">
+            <div className="floor-selector" aria-label="Choose a floor">
+              {levels.map((level) => (
+                <button
+                  key={level.id}
+                  className={currentLevel.id === level.id ? 'active' : ''}
+                  aria-pressed={currentLevel.id === level.id}
+                  onClick={() => selectFloor(level.floorZ)}
+                >
+                  <Layers size={13} /> {level.label}
+                </button>
+              ))}
+            </div>
             {tab === 'plan' && (
               <>
                 <div className="panel-heading">
                   <div>
                     <div className="eyebrow">YOUR HOME, YOUR WAY</div>
-                    <h2>Main floor</h2>
+                    <h2>{currentLevel.label}</h2>
                   </div>
-                  <span className="small-tag">~40 m²</span>
+                  <span className="small-tag">{activeFloorZ > 0 ? '~88 m²' : '~40 m²'}</span>
                 </div>
-                <p className="panel-caption">Entry, kitchen & everyday moments.</p>
+                <p className="panel-caption">
+                  {activeFloorZ > 0
+                    ? 'Two bedrooms, hallway & quiet corners.'
+                    : 'Entry, kitchen & everyday moments.'}
+                </p>
                 <PlanView
                   scene={scene}
+                  floorZ={activeFloorZ}
+                  walkPose={walkPose}
                   selected={selected}
                   onSelect={setSelected}
                   onMove={(id, x, y) => {
@@ -615,7 +649,7 @@ export default function App() {
                           const before = scene.objects.map((o) => o.id);
                           const next = await act(
                             'add',
-                            { kind: c.kind },
+                            { kind: c.kind, floorZ: activeFloorZ },
                             `Adding ${c.name.toLowerCase()}`,
                           );
                           if (next?.scene) {
@@ -681,7 +715,8 @@ export default function App() {
             )}
           </div>
           <div className="sidebar-bottom">
-            <span className="floor-dot" /> Lower floor <span>Metres · Rev {scene.revision}</span>
+            <span className="floor-dot" /> {currentLevel.label}{' '}
+            <span>Metres · Rev {scene.revision}</span>
           </div>
         </aside>
         <section className="main-stage" aria-label="Home exploration workspace">
@@ -694,6 +729,10 @@ export default function App() {
               onSelect={setSelected}
               verification={state.verification}
               showRoute={showRoute}
+              activeFloorZ={activeFloorZ}
+              onWalkModeChange={setWalking}
+              onFloorChange={setActiveFloorZ}
+              onWalkPoseChange={setWalkPose}
             />
             <div className="viewport-top">
               <div className="view-switch">
@@ -702,6 +741,16 @@ export default function App() {
                 </button>
                 <button className={compare ? 'active' : ''} onClick={() => setCompare(!compare)}>
                   <Layers size={14} /> Compare
+                </button>
+                <button
+                  className={walking ? 'active' : ''}
+                  aria-pressed={walking}
+                  onClick={() => {
+                    setCompare(false);
+                    viewer.current?.setWalkMode(!walking);
+                  }}
+                >
+                  <Footprints size={14} /> {walking ? 'Exit walk' : 'Walk inside'}
                 </button>
               </div>
               <button
@@ -786,18 +835,25 @@ export default function App() {
             </div>
             <div className="viewport-bottom">
               <div className="camera-presets">
-                {scene.cameras.map((c) => (
-                  <button
-                    key={c.id}
-                    className={camera === c.id ? 'active' : ''}
-                    onClick={() => setView(c.id)}
-                  >
-                    {c.label}
-                  </button>
-                ))}
+                {scene.cameras
+                  .filter(
+                    (c) => c.id === 'overview' || Math.abs((c.floorZ || 0) - activeFloorZ) < 0.01,
+                  )
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      className={camera === c.id ? 'active' : ''}
+                      onClick={() => setView(c.id)}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
               </div>
               <div className="viewer-hint">
-                <MousePointer2 size={12} /> Drag to orbit · Scroll to zoom
+                <MousePointer2 size={12} />{' '}
+                {walking
+                  ? 'WASD move · ← → turn · ↑ ↓ look · Drag to look · Esc exit'
+                  : 'Drag to orbit · Scroll to zoom'}
               </div>
             </div>
             {notification && (
@@ -843,7 +899,11 @@ export default function App() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (prompt.trim())
-                  act('furnish', { prompt: prompt.trim() }, 'Argon is planning your arrangement');
+                  act(
+                    'furnish',
+                    { prompt: prompt.trim(), floorZ: activeFloorZ },
+                    'Argon is planning your arrangement',
+                  );
               }}
             >
               <input
@@ -872,7 +932,11 @@ export default function App() {
                   const p =
                     'Add a two-seat sofa and a work desk. Keep the entrance, kitchen, living room and stairs reachable.';
                   setPrompt(p);
-                  act('furnish', { prompt: p }, 'Argon is planning your arrangement');
+                  act(
+                    'furnish',
+                    { prompt: p, floorZ: activeFloorZ },
+                    'Argon is planning your arrangement',
+                  );
                 }}
               >
                 <Plus size={11} /> Sofa + work space
@@ -1151,14 +1215,16 @@ export default function App() {
             </button>
             <div className="eyebrow">WELCOME TO LISTING2LIVING</div>
             <h2 id="help-title">Step inside your next home.</h2>
-            <p>
-              Explore a reconstruction of Brannan's lower floor, then make room for the way you
-              live.
-            </p>
+            <p>Explore both floors of Brannan, then make room for the way you live.</p>
             <ul>
               <li>
                 <strong>Explore:</strong> drag to orbit, scroll to zoom, or choose a camera view.
-                Focus the view and use arrow keys to move.
+                Select Main floor or Second floor to change levels.
+              </li>
+              <li>
+                <strong>Walk inside:</strong> W/S move forward and backward; A/D move sideways.
+                Left/right arrows turn, up/down arrows look up and down. Drag to look around, walk
+                onto the stairs to change floors, and press Escape to exit.
               </li>
               <li>
                 <strong>Arrange:</strong> add furniture, then drag it on the floor plan. Select it

@@ -2,12 +2,15 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { CameraPreset, SceneObject, SceneSpec, Verification, Vec3 } from '../shared/types';
+import type { SceneObject, SceneSpec, Verification, Vec3 } from '../shared/types';
+import { advanceWalker, EYE_HEIGHT, findWalkStart, type WalkerPose } from '../shared/navigation';
 
 export interface ViewerHandle {
   capture: () => string;
   view: (id: string) => void;
   walk: () => void;
+  setWalkMode: (enabled: boolean) => void;
+  level: (floorZ: number) => void;
 }
 interface Props {
   scene: SceneSpec;
@@ -16,6 +19,10 @@ interface Props {
   onSelect: (id: string | null) => void;
   verification: Verification | null;
   showRoute: boolean;
+  activeFloorZ?: number;
+  onWalkModeChange?: (walking: boolean) => void;
+  onFloorChange?: (floorZ: number) => void;
+  onWalkPoseChange?: (pose: WalkerPose | null) => void;
 }
 const vec = (p: Vec3) => new THREE.Vector3(p[0], p[2], -p[1]);
 const material = (color: string, roughness = 0.8, metalness = 0) =>
@@ -259,15 +266,16 @@ function architecture(scene: SceneSpec) {
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, floor);
     mesh.position.y = r.floorZ;
+    mesh.userData = { role: 'floor', floorZ: r.floorZ, sceneId: r.id };
     mesh.receiveShadow = true;
     g.add(mesh);
   }
   for (const w of scene.walls) {
     const length = Math.hypot(w.end[0] - w.start[0], w.end[1] - w.start[1]);
     const wall = new THREE.Group();
-    wall.position.copy(vec([w.start[0], w.start[1], 0]));
+    wall.position.copy(vec([w.start[0], w.start[1], w.floorZ ?? 0]));
     wall.rotation.y = Math.atan2(w.end[1] - w.start[1], w.end[0] - w.start[0]);
-    wall.userData = { sceneId: w.id, role: 'wall' };
+    wall.userData = { sceneId: w.id, role: 'wall', floorZ: w.floorZ ?? 0 };
     const mat = material(w.color);
     const openings = [...w.openings].sort((a, b) => a.offset - b.offset);
     let cursor = 0;
@@ -297,11 +305,19 @@ function architecture(scene: SceneSpec) {
     segment(cursor, length - cursor, 0, w.height);
     g.add(wall);
   }
-  scene.objects.filter((o) => !o.movable).forEach((o) => g.add(furnishing(o)));
+  scene.objects
+    .filter((o) => !o.movable)
+    .forEach((o) => {
+      const item = furnishing(o);
+      item.userData.role = 'fixed-object';
+      item.userData.floorZ = objectFloor(scene, o);
+      g.add(item);
+    });
   for (const s of scene.stairs) {
     const stairs = new THREE.Group();
     stairs.position.copy(vec(s.position));
     stairs.rotation.y = s.rotation;
+    stairs.userData = { role: 'stair', sceneId: s.id, floorZ: s.position[2] - s.dimensions[2] / 2 };
     const [w, d, h] = s.dimensions;
     stairs.position.y -= h / 2;
     for (let i = 0; i < s.steps; i++)
@@ -352,40 +368,89 @@ function disposeGroup(group: THREE.Object3D) {
   });
   group.clear();
 }
+function objectFloor(scene: SceneSpec, object: SceneObject) {
+  const base = object.position[2] - object.dimensions[2] / 2;
+  return (
+    [...new Set(scene.rooms.map((room) => room.floorZ))].sort(
+      (a, b) => Math.abs(a - base) - Math.abs(b - base),
+    )[0] ?? 0
+  );
+}
 function architectureView(runtime: any, overview: boolean) {
   runtime.overview = overview;
-  runtime.building.traverse((o: THREE.Object3D) => {
-    const { role, sceneId } = o.userData;
-    if (role === 'ceiling') o.visible = !overview;
-    else if (role === 'wall' || role === 'wall-trim') {
+  const activeFloor = runtime.activeFloorZ ?? 0;
+  runtime.building.traverse((node: THREE.Object3D) => {
+    const { role, sceneId, floorZ } = node.userData;
+    if (!role) return;
+    const floor = Number.isFinite(floorZ) ? Number(floorZ) : 0;
+    const staircase = role === 'stair' || role === 'stair-rail';
+    const onLevel = Math.abs(floor - activeFloor) < 0.08;
+    node.visible = !overview || onLevel || staircase;
+    if (role === 'ceiling') node.visible = !overview;
+    else if (overview && (role === 'wall' || role === 'wall-trim')) {
       const front =
         sceneId === 'wall-west' ||
         sceneId === 'wall-entry' ||
         sceneId === 'wall-bath-bottom' ||
-        sceneId === 'wall-bath-notch-y';
-      o.visible = !(overview && front);
+        sceneId === 'wall-bath-notch-y' ||
+        sceneId === 'upper-wall-west' ||
+        sceneId === 'upper-wall-east-south' ||
+        sceneId === 'upper-wall-west-south';
+      node.visible = onLevel && !front;
     }
+  });
+  runtime.objects.children.forEach((node: THREE.Object3D) => {
+    node.visible = !overview || Math.abs((node.userData.floorZ ?? 0) - activeFloor) < 0.08;
+  });
+  runtime.selection.children.forEach((node: THREE.Object3D) => {
+    node.visible = !overview || Math.abs((node.userData.floorZ ?? 0) - activeFloor) < 0.08;
   });
 }
 
 export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
-  { scene, modelUrl, selected, onSelect, verification, showRoute },
+  {
+    scene,
+    modelUrl,
+    selected,
+    onSelect,
+    verification,
+    showRoute,
+    activeFloorZ = 0,
+    onWalkModeChange,
+    onFloorChange,
+    onWalkPoseChange,
+  },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null),
-    runtime = useRef<any>(null),
-    props = useRef({ scene, onSelect }),
-    [failed, setFailed] = useState(false),
-    [loaded, setLoaded] = useState(false);
-  props.current = { scene, onSelect };
+    runtime = useRef<any>(null);
+  const props = useRef({
+    scene,
+    onSelect,
+    activeFloorZ,
+    onWalkModeChange,
+    onFloorChange,
+    onWalkPoseChange,
+  });
+  props.current = {
+    scene,
+    onSelect,
+    activeFloorZ,
+    onWalkModeChange,
+    onFloorChange,
+    onWalkPoseChange,
+  };
+  const [failed, setFailed] = useState(false),
+    [loaded, setLoaded] = useState(false),
+    [walking, setWalking] = useState(false);
   const architectureKey = JSON.stringify([
-      scene.id,
-      scene.rooms,
-      scene.walls,
-      scene.stairs,
-      scene.objects.filter((o) => !o.movable),
-    ]),
-    objectKey = JSON.stringify(scene.objects),
+    scene.id,
+    scene.rooms,
+    scene.walls,
+    scene.stairs,
+    scene.objects.filter((o) => !o.movable),
+  ]);
+  const objectKey = JSON.stringify(scene.objects),
     routeKey = JSON.stringify(verification);
   useImperativeHandle(
     ref,
@@ -399,26 +464,42 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
       view: (id) => {
         const r = runtime.current;
         if (!r) return;
+        r.setWalking(false);
         if (id === 'overview') {
           r.home();
           return;
         }
-        const p = props.current.scene.cameras.find((c) => c.id === id);
-        if (p) {
-          r.goal = { position: vec(p.position), target: vec(p.target) };
-          r.controls.maxPolarAngle = Math.PI * 0.94;
-          r.camera.fov = 67.3;
-          r.camera.updateProjectionMatrix();
-          architectureView(r, false);
-        } else r.home();
+        const preset = props.current.scene.cameras.find((c) => c.id === id);
+        if (!preset) {
+          r.home();
+          return;
+        }
+        const floor =
+          preset.floorZ ??
+          [...new Set(props.current.scene.rooms.map((room) => room.floorZ))].sort(
+            (a, b) =>
+              Math.abs(a + EYE_HEIGHT - preset.position[2]) -
+              Math.abs(b + EYE_HEIGHT - preset.position[2]),
+          )[0] ??
+          0;
+        r.activeFloorZ = floor;
+        props.current.onFloorChange?.(floor);
+        r.goal = { position: vec(preset.position), target: vec(preset.target) };
+        r.controls.maxPolarAngle = Math.PI * 0.94;
+        r.camera.fov = 67.3;
+        r.camera.updateProjectionMatrix();
+        architectureView(r, false);
       },
       walk: () => {
         const r = runtime.current;
         if (r) r.walkStart = performance.now();
       },
+      setWalkMode: (enabled) => runtime.current?.setWalking(enabled),
+      level: (floor) => runtime.current?.setLevel(floor),
     }),
     [],
   );
+
   useEffect(() => {
     if (!host.current) return;
     const container = host.current;
@@ -454,23 +535,22 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
     controls.enableDamping = true;
     controls.dampingFactor = 0.075;
     controls.minDistance = 0.4;
-    controls.maxDistance = 26;
+    controls.maxDistance = 35;
     controls.maxPolarAngle = Math.PI * 0.49;
-    controls.target.set(3, 0, -4);
     world.add(new THREE.HemisphereLight('#fcf6e8', '#a8b19e', 2.2));
-    const sun = new THREE.DirectionalLight('#fff3da', 3.0);
-    sun.position.set(-5, 12, -9);
+    const sun = new THREE.DirectionalLight('#fff3da', 3);
+    sun.position.set(-5, 14, -9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -12;
-    sun.shadow.camera.right = 12;
-    sun.shadow.camera.top = 12;
-    sun.shadow.camera.bottom = -12;
+    sun.shadow.camera.left = -14;
+    sun.shadow.camera.right = 14;
+    sun.shadow.camera.top = 14;
+    sun.shadow.camera.bottom = -14;
     sun.shadow.normalBias = 0.025;
     sun.shadow.bias = -0.0002;
     world.add(sun);
     const fill = new THREE.DirectionalLight('#d9e7eb', 1.3);
-    fill.position.set(8, 5, 7);
+    fill.position.set(8, 8, 7);
     world.add(fill);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), material('#e5e6dc', 1));
     ground.rotation.x = -Math.PI / 2;
@@ -491,23 +571,106 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
       cylinder(resident, 0.035, 0.03, 0.5, x, 0.26, 0, material('#454e45'));
     resident.visible = false;
     world.add(resident);
+    const keys = new Set<string>();
+    const reportPose = () => {
+      const r = runtime.current;
+      if (r?.walking && r.pose)
+        props.current.onWalkPoseChange?.({
+          position: [...r.pose.position] as Vec3,
+          floorZ: r.pose.floorZ,
+          yaw: r.pose.yaw,
+          pitch: r.pose.pitch,
+        });
+    };
+    const syncCamera = () => {
+      const r = runtime.current;
+      if (!r?.pose) return;
+      const p = r.pose as WalkerPose;
+      camera.position.copy(vec([p.position[0], p.position[1], p.position[2] + EYE_HEIGHT]));
+      const horizontal = Math.cos(p.pitch);
+      camera.lookAt(
+        camera.position.x + Math.sin(p.yaw) * horizontal,
+        camera.position.y + Math.sin(p.pitch),
+        camera.position.z - Math.cos(p.yaw) * horizontal,
+      );
+    };
+    const spawn = (floor: number): WalkerPose => {
+      const position = findWalkStart(props.current.scene, floor);
+      // Both entry points face their clear corridor, not a room across a wall.
+      const yaw = floor > 0 ? Math.PI : 0;
+      return { position, floorZ: floor, yaw, pitch: -0.1 };
+    };
+    const setWalkMode = (enabled: boolean) => {
+      const r = runtime.current;
+      if (!r || r.walking === enabled) return;
+      keys.clear();
+      r.goal = null;
+      r.walking = enabled;
+      r.dragging = false;
+      controls.enabled = !enabled;
+      setWalking(enabled);
+      if (enabled) {
+        r.pose = spawn(r.activeFloorZ);
+        camera.fov = 67.3;
+        camera.updateProjectionMatrix();
+        architectureView(r, false);
+        syncCamera();
+        container.focus({ preventScroll: true });
+        reportPose();
+      } else {
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+        controls.target.copy(camera.position).add(direction.multiplyScalar(3));
+        controls.update();
+        props.current.onWalkPoseChange?.(null);
+      }
+      props.current.onWalkModeChange?.(enabled);
+      renderer.render(world, camera);
+    };
     const home = () => {
-      const pts = props.current.scene.rooms.flatMap((r) => r.polygon);
-      const minX = Math.min(...pts.map((p) => p[0])),
-        maxX = Math.max(...pts.map((p) => p[0])),
-        minY = Math.min(...pts.map((p) => p[1])),
-        maxY = Math.max(...pts.map((p) => p[1]));
+      const r = runtime.current;
+      if (!r) return;
+      r.setWalking(false);
+      const rooms = props.current.scene.rooms.filter(
+        (room) => Math.abs(room.floorZ - r.activeFloorZ) < 0.08,
+      );
+      const points = (rooms.length ? rooms : props.current.scene.rooms).flatMap(
+        (room) => room.polygon,
+      );
+      const minX = Math.min(...points.map((p) => p[0])),
+        maxX = Math.max(...points.map((p) => p[0])),
+        minY = Math.min(...points.map((p) => p[1])),
+        maxY = Math.max(...points.map((p) => p[1]));
       const cx = (minX + maxX) / 2,
         cy = (minY + maxY) / 2,
         size = Math.max(maxX - minX, maxY - minY);
-      runtime.current.goal = {
-        position: new THREE.Vector3(cx - size * 0.75, size * 0.91, -cy + size * 0.75),
-        target: new THREE.Vector3(cx, 0.6, -cy),
+      r.goal = {
+        position: new THREE.Vector3(
+          cx - size * 0.75,
+          r.activeFloorZ + size * 0.91,
+          -cy + size * 0.75,
+        ),
+        target: new THREE.Vector3(cx, r.activeFloorZ + 0.6, -cy),
       };
       controls.maxPolarAngle = Math.PI * 0.49;
       camera.fov = 42;
       camera.updateProjectionMatrix();
-      architectureView(runtime.current, true);
+      architectureView(r, true);
+    };
+    const setLevel = (floor: number) => {
+      const r = runtime.current;
+      if (!r || Math.abs(r.activeFloorZ - floor) < 0.01) return;
+      keys.clear();
+      r.activeFloorZ = floor;
+      r.walkStart = null;
+      resident.visible = false;
+      if (r.walking) {
+        r.pose = spawn(floor);
+        syncCamera();
+        reportPose();
+        architectureView(r, false);
+      } else home();
+      renderer.render(world, camera);
     };
     runtime.current = {
       renderer,
@@ -520,9 +683,15 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
       selection,
       resident,
       home,
+      setWalking: setWalkMode,
+      setLevel,
+      activeFloorZ: props.current.activeFloorZ,
+      walking: false,
+      pose: null,
       goal: null,
       walkStart: null,
       walkPoints: [],
+      dragging: false,
     };
     home();
     camera.position.copy(runtime.current.goal.position);
@@ -530,78 +699,160 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
     runtime.current.goal = null;
     const ray = new THREE.Raycaster(),
       pointer = new THREE.Vector2();
-    let down = [0, 0];
-    const start = (e: PointerEvent) => {
-      down = [e.clientX, e.clientY];
-      runtime.current.goal = null;
-    };
-    const end = (e: PointerEvent) => {
-      if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        (-(e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      ray.setFromCamera(pointer, camera);
-      const hits = ray.intersectObjects(objects.children, true);
-      props.current.onSelect(hits[0]?.object.userData.objectId || null);
-    };
-    renderer.domElement.addEventListener('pointerdown', start);
-    renderer.domElement.addEventListener('pointerup', end);
-    const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const moves: Record<string, [number, number]> = {
-        ArrowUp: [0, -1],
-        w: [0, -1],
-        ArrowDown: [0, 1],
-        s: [0, 1],
-        ArrowLeft: [-1, 0],
-        a: [-1, 0],
-        ArrowRight: [1, 0],
-        d: [1, 0],
-      };
-      if (!moves[e.key]) return;
-      e.preventDefault();
-      runtime.current.goal = null;
-      const [x, z] = moves[e.key],
-        forward = new THREE.Vector3();
-      camera.getWorldDirection(forward);
-      forward.y = 0;
-      forward.normalize();
-      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
-      const shift = forward.multiplyScalar(-z * 0.24).add(right.multiplyScalar(x * 0.24));
-      camera.position.add(shift);
-      controls.target.add(shift);
-    };
-    container.addEventListener('keydown', key);
-    const observer = new ResizeObserver(() => {
-      const w = container.clientWidth,
-        h = container.clientHeight;
-      if (!w || !h) return;
-      renderer.setSize(w, h);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    });
-    observer.observe(container);
-    let frame = 0;
-    const animate = () => {
-      frame = requestAnimationFrame(animate);
+    let down = [0, 0],
+      lastPointer = [0, 0];
+    const pointerDown = (event: PointerEvent) => {
       const r = runtime.current;
       if (!r) return;
-      if (r.goal) {
-        camera.position.lerp(r.goal.position, 0.09);
-        controls.target.lerp(r.goal.target, 0.09);
-        if (camera.position.distanceTo(r.goal.position) < 0.01) r.goal = null;
+      down = [event.clientX, event.clientY];
+      lastPointer = down;
+      r.goal = null;
+      if (r.walking) {
+        event.preventDefault();
+        container.focus({ preventScroll: true });
+        r.dragging = true;
+        renderer.domElement.setPointerCapture(event.pointerId);
+      }
+    };
+    const pointerMove = (event: PointerEvent) => {
+      const r = runtime.current;
+      if (!r?.walking || !r.dragging) return;
+      const dx = event.clientX - lastPointer[0],
+        dy = event.clientY - lastPointer[1];
+      lastPointer = [event.clientX, event.clientY];
+      r.pose.yaw += dx * 0.004;
+      r.pose.pitch = Math.max(-1.18, Math.min(1.18, r.pose.pitch - dy * 0.004));
+      syncCamera();
+    };
+    const pointerUp = (event: PointerEvent) => {
+      const r = runtime.current;
+      if (!r) return;
+      if (r.walking) {
+        r.dragging = false;
+        if (renderer.domElement.hasPointerCapture(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        return;
+      }
+      if (Math.hypot(event.clientX - down[0], event.clientY - down[1]) > 5) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        (-(event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      ray.setFromCamera(pointer, camera);
+      const hits = ray.intersectObjects(
+        objects.children.filter((o: THREE.Object3D) => o.visible),
+        true,
+      );
+      props.current.onSelect(hits[0]?.object.userData.objectId || null);
+    };
+    renderer.domElement.addEventListener('pointerdown', pointerDown);
+    renderer.domElement.addEventListener('pointermove', pointerMove);
+    renderer.domElement.addEventListener('pointerup', pointerUp);
+    renderer.domElement.addEventListener('pointercancel', pointerUp);
+    const clearKeys = () => {
+      keys.clear();
+      if (runtime.current) runtime.current.dragging = false;
+    };
+    const keydown = (event: KeyboardEvent) => {
+      const r = runtime.current;
+      if (!r?.walking) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.matches('input,textarea,select'))
+      )
+        return;
+      if (!container.contains(target as Node) && document.activeElement !== container) return;
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        setWalkMode(false);
+        return;
+      }
+      if (
+        [
+          'KeyW',
+          'KeyA',
+          'KeyS',
+          'KeyD',
+          'ArrowLeft',
+          'ArrowRight',
+          'ArrowUp',
+          'ArrowDown',
+        ].includes(event.code)
+      ) {
+        event.preventDefault();
+        keys.add(event.code);
+      }
+    };
+    const keyup = (event: KeyboardEvent) => keys.delete(event.code);
+    const focusout = (event: FocusEvent) => {
+      if (!container.contains(event.relatedTarget as Node)) clearKeys();
+    };
+    container.addEventListener('keydown', keydown);
+    container.addEventListener('focusout', focusout);
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', clearKeys);
+    document.addEventListener('visibilitychange', clearKeys);
+    const observer = new ResizeObserver(() => {
+      const width = container.clientWidth,
+        height = container.clientHeight;
+      if (!width || !height) return;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.render(world, camera);
+    });
+    observer.observe(container);
+    let frame = 0,
+      lastTime = performance.now(),
+      lastReport = 0;
+    const animate = () => {
+      frame = requestAnimationFrame(animate);
+      const now = performance.now(),
+        dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
+      lastTime = now;
+      const r = runtime.current;
+      if (!r) return;
+      if (r.walking) {
+        const beforeFloor = r.pose.floorZ;
+        r.pose = advanceWalker(
+          props.current.scene,
+          r.pose,
+          {
+            forward: Number(keys.has('KeyW')) - Number(keys.has('KeyS')),
+            strafe: Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
+            turn: Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')),
+            look: Number(keys.has('ArrowUp')) - Number(keys.has('ArrowDown')),
+          },
+          dt,
+        );
+        syncCamera();
+        if (Math.abs(r.pose.floorZ - beforeFloor) > 0.01) {
+          r.activeFloorZ = r.pose.floorZ;
+          props.current.onFloorChange?.(r.pose.floorZ);
+        }
+        if (now - lastReport >= 100) {
+          reportPose();
+          lastReport = now;
+        }
+      } else {
+        if (r.goal) {
+          const alpha = 1 - Math.exp(-dt * 7);
+          camera.position.lerp(r.goal.position, alpha);
+          controls.target.lerp(r.goal.target, alpha);
+          if (camera.position.distanceTo(r.goal.position) < 0.01) r.goal = null;
+        }
+        controls.update();
       }
       if (r.walkStart && r.walkPoints.length > 1) {
-        const progress = (performance.now() - r.walkStart) / 7000;
+        const progress = (now - r.walkStart) / 7000;
         resident.visible = progress < 1;
         const step = Math.min(r.walkPoints.length - 1, progress * (r.walkPoints.length - 1)),
           i = Math.min(r.walkPoints.length - 2, Math.floor(step));
         resident.position.lerpVectors(r.walkPoints[i], r.walkPoints[i + 1], step - i);
         if (progress >= 1) r.walkStart = null;
       }
-      controls.update();
       renderer.render(world, camera);
     };
     animate();
@@ -612,9 +863,15 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      renderer.domElement.removeEventListener('pointerdown', start);
-      renderer.domElement.removeEventListener('pointerup', end);
-      container.removeEventListener('keydown', key);
+      renderer.domElement.removeEventListener('pointerdown', pointerDown);
+      renderer.domElement.removeEventListener('pointermove', pointerMove);
+      renderer.domElement.removeEventListener('pointerup', pointerUp);
+      renderer.domElement.removeEventListener('pointercancel', pointerUp);
+      container.removeEventListener('keydown', keydown);
+      container.removeEventListener('focusout', focusout);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', clearKeys);
+      document.removeEventListener('visibilitychange', clearKeys);
       controls.dispose();
       disposeGroup(world);
       renderer.dispose();
@@ -623,16 +880,20 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
       delete (window as any).__l2lCapture;
     };
   }, []);
+
+  useEffect(() => {
+    runtime.current?.setLevel(activeFloorZ);
+  }, [activeFloorZ]);
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
     let cancelled = false;
     setLoaded(false);
     disposeGroup(r.building);
-    const fallback = architecture(scene);
-    r.building.add(fallback);
+    r.building.add(architecture(scene));
     architectureView(r, r.overview);
-    if (modelUrl) {
+    r.renderer.render(r.world, r.camera);
+    if (modelUrl)
       new GLTFLoader().load(
         modelUrl,
         (gltf) => {
@@ -641,20 +902,20 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
             return;
           }
           disposeGroup(r.building);
-          gltf.scene.traverse((o) => {
-            if (o instanceof THREE.Mesh) {
-              o.castShadow = true;
-              o.receiveShadow = true;
+          gltf.scene.traverse((node) => {
+            if (node instanceof THREE.Mesh) {
+              node.castShadow = true;
+              node.receiveShadow = true;
             }
           });
           r.building.add(gltf.scene);
           architectureView(r, r.overview);
+          r.renderer.render(r.world, r.camera);
           setLoaded(true);
         },
         undefined,
         () => setLoaded(false),
       );
-    }
     return () => {
       cancelled = true;
     };
@@ -663,55 +924,71 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
     const r = runtime.current;
     if (!r) return;
     disposeGroup(r.objects);
-    scene.objects.filter((o) => o.movable).forEach((o) => r.objects.add(furnishing(o)));
-  }, [objectKey]);
+    scene.objects
+      .filter((o) => o.movable)
+      .forEach((o) => {
+        const item = furnishing(o);
+        item.userData.floorZ = objectFloor(scene, o);
+        r.objects.add(item);
+      });
+    architectureView(r, r.overview);
+  }, [objectKey, architectureKey]);
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
     disposeGroup(r.selection);
-    const obj = scene.objects.find((o) => o.id === selected);
-    if (obj) {
-      const [w, d, h] = obj.dimensions;
-      const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, h + 0.06, d + 0.06));
+    const object = scene.objects.find((o) => o.id === selected);
+    if (object) {
+      const [w, d, h] = object.dimensions;
       const line = new THREE.LineSegments(
-        edges,
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, h + 0.06, d + 0.06)),
         new THREE.LineBasicMaterial({ color: '#416e57', transparent: true, opacity: 0.8 }),
       );
-      line.position.copy(vec(obj.position));
-      line.rotation.y = obj.rotation;
+      line.position.copy(vec(object.position));
+      line.rotation.y = object.rotation;
+      line.userData.floorZ = objectFloor(scene, object);
       r.selection.add(line);
     }
-  }, [selected, scene.objects]);
+    architectureView(r, r.overview);
+  }, [selected, objectKey, activeFloorZ]);
   useEffect(() => {
     const r = runtime.current;
     if (!r) return;
     disposeGroup(r.routeGroup);
     r.walkPoints = [];
     if (!showRoute || !verification) return;
-    verification.routes.forEach((route) => {
-      if (route.points.length < 2) return;
-      const points = route.points.map((p) => new THREE.Vector3(p[0], 0.055, -p[1]));
-      const curve = new THREE.CatmullRomCurve3(points);
-      const tube = new THREE.Mesh(
-        new THREE.TubeGeometry(curve, Math.max(12, points.length * 3), 0.026, 6, false),
-        new THREE.MeshBasicMaterial({
-          color: route.passed ? '#538466' : '#c77d53',
-          depthTest: false,
-          transparent: true,
-          opacity: 0.9,
-        }),
-      );
-      tube.renderOrder = 5;
-      r.routeGroup.add(tube);
-      if (route.passed && points.length > r.walkPoints.length) r.walkPoints = points;
-    });
-  }, [routeKey, showRoute]);
+    verification.routes
+      .filter((route) => Math.abs((route.floorZ ?? 0) - activeFloorZ) < 0.08)
+      .forEach((route) => {
+        if (route.points.length < 2) return;
+        const points = route.points.map(
+          (p) => new THREE.Vector3(p[0], (route.floorZ ?? 0) + 0.055, -p[1]),
+        );
+        const curve = new THREE.CatmullRomCurve3(points);
+        const tube = new THREE.Mesh(
+          new THREE.TubeGeometry(curve, Math.max(12, points.length * 3), 0.026, 6, false),
+          new THREE.MeshBasicMaterial({
+            color: route.passed ? '#538466' : '#c77d53',
+            depthTest: false,
+            transparent: true,
+            opacity: 0.9,
+          }),
+        );
+        tube.renderOrder = 5;
+        r.routeGroup.add(tube);
+        if (route.passed && points.length > r.walkPoints.length) r.walkPoints = points;
+      });
+  }, [routeKey, showRoute, activeFloorZ]);
   return (
     <div
-      className="scene-host"
+      className={`scene-host${walking ? ' walking' : ''}`}
       ref={host}
       tabIndex={0}
-      aria-label="Interactive 3D home. Drag to orbit, scroll to zoom, arrow keys to move."
+      aria-label={
+        walking
+          ? 'First-person home walkthrough. W A S D move; left and right arrows turn; up and down arrows look; drag to look; Escape exits.'
+          : 'Interactive 3D home. Drag to orbit and scroll to zoom.'
+      }
     >
       {failed && (
         <div className="webgl-error">
@@ -721,6 +998,22 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
             furniture.
           </p>
         </div>
+      )}
+      {walking && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: '#fff9',
+            border: '1px solid #38503a66',
+            pointerEvents: 'none',
+          }}
+        />
       )}
       <span className="model-provenance">
         {loaded ? 'Blender-built geometry' : 'Scene preview · procedural geometry'}

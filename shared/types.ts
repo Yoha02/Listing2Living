@@ -25,6 +25,8 @@ export interface Wall {
   thickness: number;
   color: string;
   openings: Opening[];
+  /** Elevation of the wall base; opening.bottom remains relative to this floor. */
+  floorZ?: number;
 }
 export interface SceneObject {
   id: string;
@@ -63,6 +65,7 @@ export interface CameraPreset {
   position: Vec3;
   target: Vec3;
   sourceRef?: string;
+  floorZ?: number;
 }
 export interface Source {
   id: string;
@@ -82,11 +85,17 @@ export interface SceneSpec {
   objects: SceneObject[];
   stairs: Stair[];
   cameras: CameraPreset[];
+  levels?: { id: string; label: string; floorZ: number }[];
   sources: Source[];
   navigation: {
     start: Vec2;
     targets: { id: string; label: string; point: Vec2 }[];
     clearance: number;
+    levels?: {
+      floorZ: number;
+      start: Vec2;
+      targets: { id: string; label: string; point: Vec2 }[];
+    }[];
   };
   notes: string[];
 }
@@ -104,6 +113,7 @@ export interface Route {
   passed: boolean;
   points: Vec2[];
   length: number;
+  floorZ?: number;
 }
 export interface Verification {
   sceneRevision: number;

@@ -12,7 +12,12 @@ import type {
 const EPS = 1e-5;
 const GRID_STEP = 0.12;
 type Rect = { center: Vec2; half: Vec2; rotation: number; id: string };
-type World = { scene: SceneSpec; obstacles: Rect[]; radius: number };
+type World = { scene: SceneSpec; obstacles: Rect[]; radius: number; floorZ: number };
+type NavigationLevel = {
+  floorZ: number;
+  start: Vec2;
+  targets: { id: string; label: string; point: Vec2 }[];
+};
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const clone = (scene: SceneSpec): SceneSpec => structuredClone(scene);
 
@@ -63,12 +68,28 @@ function insidePolygon(p: Vec2, polygon: Vec2[]): boolean {
   }
   return inside;
 }
-function insideFloor(scene: SceneSpec, p: Vec2): boolean {
-  return scene.rooms.some((room) => Math.abs(room.floorZ) < 0.25 && insidePolygon(p, room.polygon));
+function insideFloor(scene: SceneSpec, p: Vec2, floorZ: number): boolean {
+  return scene.rooms.some(
+    (room) => Math.abs(room.floorZ - floorZ) < 0.1 && insidePolygon(p, room.polygon),
+  );
 }
-function rectInsideFloor(scene: SceneSpec, r: Rect): boolean {
+/** Floor support is derived from object bottom Z; never silently move an object between floors. */
+export function objectFloorZ(
+  scene: SceneSpec,
+  object: Pick<SceneObject, 'position' | 'dimensions'>,
+): number | undefined {
+  const bottom = object.position[2] - object.dimensions[2] / 2;
+  const floors = [...new Set(scene.rooms.map((room) => room.floorZ))].sort(
+    (a, b) => Math.abs(a - bottom) - Math.abs(b - bottom),
+  );
+  return floors.length && Math.abs(floors[0] - bottom) < 0.15 ? floors[0] : undefined;
+}
+function overlapsHeight(bottomA: number, topA: number, bottomB: number, topB: number): boolean {
+  return Math.min(topA, topB) - Math.max(bottomA, bottomB) > 0.02;
+}
+function rectInsideFloor(scene: SceneSpec, r: Rect, floorZ: number): boolean {
   const points = corners(r);
-  if (!insideFloor(scene, r.center)) return false;
+  if (!insideFloor(scene, r.center, floorZ)) return false;
   // Sample edges as well as corners: a rectangle can bridge a concave floor boundary.
   for (let i = 0; i < points.length; i++) {
     const a = points[i],
@@ -76,13 +97,27 @@ function rectInsideFloor(scene: SceneSpec, r: Rect): boolean {
       steps = Math.max(1, Math.ceil(distance(a, b) / 0.1));
     for (let n = 0; n <= steps; n++)
       if (
-        !insideFloor(scene, [
-          a[0] + ((b[0] - a[0]) * n) / steps,
-          a[1] + ((b[1] - a[1]) * n) / steps,
-        ])
+        !insideFloor(
+          scene,
+          [a[0] + ((b[0] - a[0]) * n) / steps, a[1] + ((b[1] - a[1]) * n) / steps],
+          floorZ,
+        )
       )
         return false;
   }
+  // Room unions may contain stairwell voids entirely inside a large footprint.
+  // Edge-only checks would miss an unsupported interior patch.
+  const nx = Math.max(1, Math.ceil((r.half[0] * 2) / 0.2)),
+    ny = Math.max(1, Math.ceil((r.half[1] * 2) / 0.2));
+  const c = Math.cos(r.rotation),
+    s = Math.sin(r.rotation);
+  for (let ix = 1; ix < nx; ix++)
+    for (let iy = 1; iy < ny; iy++) {
+      const x = -r.half[0] + (ix * r.half[0] * 2) / nx,
+        y = -r.half[1] + (iy * r.half[1] * 2) / ny;
+      if (!insideFloor(scene, [r.center[0] + x * c - y * s, r.center[1] + x * s + y * c], floorZ))
+        return false;
+    }
   return true;
 }
 function rectsOverlap(a: Rect, b: Rect): boolean {
@@ -118,12 +153,16 @@ function wallRects(scene: SceneSpec, zMin = 0, zMax = 1.8): Rect[] {
   const result: Rect[] = [];
   for (const wall of scene.walls) {
     const length = distance(wall.start, wall.end);
-    if (length <= EPS || zMin >= wall.height) continue;
+    const base = wall.floorZ || 0,
+      top = base + wall.height;
+    if (length <= EPS || zMin >= top - EPS || zMax <= base + EPS) continue;
     const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
     // offset is the opening's centre measured from the wall's start.
     const gaps = wall.openings
       .filter(
-        (o) => o.bottom <= zMin + EPS && o.bottom + o.height >= Math.min(zMax, wall.height) - EPS,
+        (o) =>
+          base + o.bottom <= Math.max(zMin, base) + EPS &&
+          base + o.bottom + o.height >= Math.min(zMax, top) - EPS,
       )
       .map((o) => [Math.max(0, o.offset - o.width / 2), Math.min(length, o.offset + o.width / 2)])
       .filter((g) => g[1] > g[0])
@@ -170,18 +209,22 @@ function furnitureOverlap(a: SceneObject, b: SceneObject): boolean {
 function geometryIssues(scene: SceneSpec): Issue[] {
   const issues: Issue[] = [];
   for (const o of scene.objects) {
-    if (o.movable && !rectInsideFloor(scene, objectRect(o)))
+    const floorZ = objectFloorZ(scene, o);
+    if (o.movable && (floorZ === undefined || !rectInsideFloor(scene, objectRect(o), floorZ)))
       issues.push({
         id: `boundary-${o.id}`,
         type: 'boundary',
         severity: 'error',
-        message: `${o.name} extends outside the modeled floor.`,
+        message:
+          floorZ === undefined
+            ? `${o.name} is not supported at a modeled floor elevation.`
+            : `${o.name} extends outside its modeled floor at ${floorZ.toFixed(2)} m.`,
         objectIds: [o.id],
       });
     if (!collisionRelevant(o)) continue;
     const walls = wallRects(
       scene,
-      Math.max(0, o.position[2] - o.dimensions[2] / 2),
+      o.position[2] - o.dimensions[2] / 2,
       o.position[2] + o.dimensions[2] / 2,
     );
     const seen = new Set<string>();
@@ -198,6 +241,15 @@ function geometryIssues(scene: SceneSpec): Issue[] {
       }
     if (o.movable)
       for (const stair of scene.stairs) {
+        if (
+          !overlapsHeight(
+            o.position[2] - o.dimensions[2] / 2,
+            o.position[2] + o.dimensions[2] / 2,
+            stair.position[2] - stair.dimensions[2] / 2,
+            stair.position[2] + stair.dimensions[2] / 2,
+          )
+        )
+          continue;
         const stairRect: Rect = {
           id: stair.id,
           center: [stair.position[0], stair.position[1]],
@@ -230,36 +282,52 @@ function geometryIssues(scene: SceneSpec): Issue[] {
     }
   return issues;
 }
-function makeWorld(scene: SceneSpec): World {
-  const obstacles = wallRects(scene);
+function makeWorld(scene: SceneSpec, floorZ: number): World {
+  const obstacles = wallRects(scene, floorZ, floorZ + 1.8);
   for (const object of scene.objects) {
     const bottom = object.position[2] - object.dimensions[2] / 2;
     if (
       object.kind !== 'rug' &&
-      bottom < 1.6 &&
-      object.position[2] + object.dimensions[2] / 2 > 0.08
+      bottom < floorZ + 1.6 &&
+      object.position[2] + object.dimensions[2] / 2 > floorZ + 0.08
     )
       obstacles.push(objectRect(object));
   }
-  for (const stair of scene.stairs)
+  for (const stair of scene.stairs) {
+    if (
+      !overlapsHeight(
+        floorZ + 0.08,
+        floorZ + 1.8,
+        stair.position[2] - stair.dimensions[2] / 2,
+        stair.position[2] + stair.dimensions[2] / 2,
+      )
+    )
+      continue;
     obstacles.push({
       id: stair.id,
       center: [stair.position[0], stair.position[1]],
       half: [stair.dimensions[0] / 2, stair.dimensions[1] / 2],
       rotation: stair.rotation,
     });
-  return { scene, obstacles, radius: Math.max(0.05, scene.navigation.clearance || 0.65) / 2 };
+  }
+  return {
+    scene,
+    obstacles,
+    radius: Math.max(0.05, scene.navigation.clearance || 0.65) / 2,
+    floorZ,
+  };
 }
 function walkable(world: World, point: Vec2): boolean {
-  if (!insideFloor(world.scene, point)) return false;
+  if (!insideFloor(world.scene, point, world.floorZ)) return false;
   // Erode the union of room polygons, not individual rooms: shared room boundaries stay open.
   for (let n = 0; n < 12; n++) {
     const angle = (n * Math.PI) / 6;
     if (
-      !insideFloor(world.scene, [
-        point[0] + Math.cos(angle) * world.radius,
-        point[1] + Math.sin(angle) * world.radius,
-      ])
+      !insideFloor(
+        world.scene,
+        [point[0] + Math.cos(angle) * world.radius, point[1] + Math.sin(angle) * world.radius],
+        world.floorZ,
+      )
     )
       return false;
   }
@@ -309,16 +377,19 @@ class MinHeap {
     return top.id;
   }
 }
-function findRoutes(scene: SceneSpec): Route[] {
-  const world = makeWorld(scene),
-    vertices = scene.rooms.flatMap((room) => room.polygon);
+function findLevelRoutes(scene: SceneSpec, level: NavigationLevel): Route[] {
+  const world = makeWorld(scene, level.floorZ),
+    vertices = scene.rooms
+      .filter((room) => Math.abs(room.floorZ - level.floorZ) < 0.1)
+      .flatMap((room) => room.polygon);
   if (!vertices.length)
-    return scene.navigation.targets.map((t) => ({
+    return level.targets.map((t) => ({
       targetId: t.id,
       label: t.label,
       passed: false,
       points: [],
       length: 0,
+      floorZ: level.floorZ,
     }));
   const minX = Math.min(...vertices.map((p) => p[0])),
     minY = Math.min(...vertices.map((p) => p[1]));
@@ -348,14 +419,15 @@ function findRoutes(scene: SceneSpec): Route[] {
     candidates.sort((a, b) => distance(point(a), p) - distance(point(b), p));
     return candidates.find((id) => free(id) && segmentWalkable(world, p, point(id)));
   };
-  const startId = snap(scene.navigation.start);
-  return scene.navigation.targets.map((target) => {
+  const startId = snap(level.start);
+  return level.targets.map((target) => {
     const failed: Route = {
       targetId: target.id,
       label: target.label,
       passed: false,
       points: [],
       length: 0,
+      floorZ: level.floorZ,
     };
     if (startId === undefined) return failed;
     const endId = snap(target.point);
@@ -376,7 +448,7 @@ function findRoutes(scene: SceneSpec): Route[] {
           raw.push(point(id));
           id = parents[id];
         }
-        raw.push(scene.navigation.start);
+        raw.push(level.start);
         raw.reverse();
         const simplified: Vec2[] = [raw[0]];
         let anchor = 0;
@@ -397,6 +469,7 @@ function findRoutes(scene: SceneSpec): Route[] {
           passed: true,
           points: simplified,
           length: simplified.slice(1).reduce((sum, p, i) => sum + distance(p, simplified[i]), 0),
+          floorZ: level.floorZ,
         };
       }
       closed[current] = 1;
@@ -420,6 +493,13 @@ function findRoutes(scene: SceneSpec): Route[] {
     return failed;
   });
 }
+function findRoutes(scene: SceneSpec): Route[] {
+  const levels: NavigationLevel[] = [
+    { floorZ: 0, start: scene.navigation.start, targets: scene.navigation.targets },
+    ...(scene.navigation.levels || []).filter((level) => Math.abs(level.floorZ) > 0.1),
+  ];
+  return levels.flatMap((level) => findLevelRoutes(scene, level));
+}
 
 export function verifyScene(scene: SceneSpec): Verification {
   const issues = geometryIssues(scene),
@@ -427,13 +507,13 @@ export function verifyScene(scene: SceneSpec): Verification {
   for (const route of routes)
     if (!route.passed)
       issues.push({
-        id: `route-${route.targetId}`,
+        id: `route-${route.floorZ || 0}-${route.targetId}`,
         type: 'route',
         severity: 'error',
-        message: `No ${scene.navigation.clearance.toFixed(2)} m clear route from the entrance to ${route.label}.`,
+        message: `No ${scene.navigation.clearance.toFixed(2)} m clear route from the ${(route.floorZ || 0) === 0 ? 'entrance' : 'floor landing'} to ${route.label} on the ${route.floorZ || 0} m level.`,
         objectIds: [],
         evidence:
-          'Geometric route test; fixed architecture and furniture footprints, including rotated objects, are considered.',
+          'Separate floor route test using fixed architecture and rotated furniture footprints. Stair traversal and accessibility are not certified.',
       });
   return {
     sceneRevision: scene.revision,
@@ -446,12 +526,13 @@ export function verifyScene(scene: SceneSpec): Verification {
 }
 
 function validPlacement(scene: SceneSpec, object: SceneObject): boolean {
-  const rect = objectRect(object);
-  if (!rectInsideFloor(scene, rect)) return false;
+  const rect = objectRect(object),
+    floorZ = objectFloorZ(scene, object);
+  if (floorZ === undefined || !rectInsideFloor(scene, rect, floorZ)) return false;
   if (
     wallRects(
       scene,
-      Math.max(0, object.position[2] - object.dimensions[2] / 2),
+      object.position[2] - object.dimensions[2] / 2,
       object.position[2] + object.dimensions[2] / 2,
     ).some((wall) => rectsOverlap(rect, wall))
   )
@@ -459,13 +540,20 @@ function validPlacement(scene: SceneSpec, object: SceneObject): boolean {
   if (scene.objects.some((other) => other.id !== object.id && furnitureOverlap(object, other)))
     return false;
   if (
-    scene.stairs.some((stair) =>
-      rectsOverlap(rect, {
-        id: stair.id,
-        center: [stair.position[0], stair.position[1]],
-        half: [stair.dimensions[0] / 2, stair.dimensions[1] / 2],
-        rotation: stair.rotation,
-      }),
+    scene.stairs.some(
+      (stair) =>
+        overlapsHeight(
+          object.position[2] - object.dimensions[2] / 2,
+          object.position[2] + object.dimensions[2] / 2,
+          stair.position[2] - stair.dimensions[2] / 2,
+          stair.position[2] + stair.dimensions[2] / 2,
+        ) &&
+        rectsOverlap(rect, {
+          id: stair.id,
+          center: [stair.position[0], stair.position[1]],
+          half: [stair.dimensions[0] / 2, stair.dimensions[1] / 2],
+          rotation: stair.rotation,
+        }),
     )
   )
     return false;
@@ -503,9 +591,11 @@ export function suggestRepair(scene: SceneSpec): {
     );
   for (const original of movable) {
     if (current.passed || performance.now() > deadline) break;
+    const floorZ = objectFloorZ(result, original);
+    if (floorZ === undefined) continue;
     const index = result.objects.findIndex((o) => o.id === original.id);
     const candidates: SceneObject[] = [];
-    for (const room of result.rooms.filter((r) => Math.abs(r.floorZ) < 0.25)) {
+    for (const room of result.rooms.filter((r) => Math.abs(r.floorZ - floorZ) < 0.1)) {
       const minX = Math.min(...room.polygon.map((p) => p[0])),
         maxX = Math.max(...room.polygon.map((p) => p[0]));
       const minY = Math.min(...room.polygon.map((p) => p[1])),
