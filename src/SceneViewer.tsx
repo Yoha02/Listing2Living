@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { SceneObject, SceneSpec, Verification, Vec3 } from '../shared/types';
 import { advanceWalker, EYE_HEIGHT, findWalkStart, type WalkerPose } from '../shared/navigation';
+import { supportingSceneFloor } from './viewerLevels';
 
 export interface ViewerHandle {
   capture: () => string;
@@ -215,11 +216,11 @@ function furnishing(o: SceneObject) {
   });
   return g;
 }
-function woodTexture() {
+function woodTexture(color = '#b58d61') {
   const c = document.createElement('canvas');
   c.width = c.height = 512;
   const a = c.getContext('2d')!;
-  a.fillStyle = '#b58d61';
+  a.fillStyle = color;
   a.fillRect(0, 0, 512, 512);
   let seed = 31;
   const rand = () => {
@@ -257,8 +258,22 @@ function woodTexture() {
 }
 function architecture(scene: SceneSpec) {
   const g = new THREE.Group();
-  const floor = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.65 });
   for (const r of scene.rooms) {
+    const appearance = r.appearance;
+    const floor =
+      appearance && appearance.floorMaterial !== 'wood'
+        ? material(
+            appearance.floorColor,
+            appearance.floorMaterial === 'tile'
+              ? 0.45
+              : appearance.floorMaterial === 'carpet'
+                ? 0.98
+                : 0.85,
+          )
+        : new THREE.MeshStandardMaterial({
+            map: woodTexture(appearance?.floorColor),
+            roughness: 0.65,
+          });
     const shape = new THREE.Shape();
     r.polygon.forEach((p, i) => (i ? shape.lineTo(p[0], p[1]) : shape.moveTo(p[0], p[1])));
     shape.closePath();
@@ -382,7 +397,7 @@ function architectureView(runtime: any, overview: boolean) {
   runtime.building.traverse((node: THREE.Object3D) => {
     const { role, sceneId, floorZ } = node.userData;
     if (!role) return;
-    const floor = Number.isFinite(floorZ) ? Number(floorZ) : 0;
+    const floor = supportingSceneFloor(floorZ, runtime.floorLevels || [0]);
     const staircase = role === 'stair' || role === 'stair-rail';
     const onLevel = Math.abs(floor - activeFloor) < 0.08;
     node.visible = !overview || onLevel || staircase;
@@ -686,6 +701,7 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
       setWalking: setWalkMode,
       setLevel,
       activeFloorZ: props.current.activeFloorZ,
+      floorLevels: props.current.scene.rooms.map((room) => room.floorZ),
       walking: false,
       pose: null,
       goal: null,
@@ -889,6 +905,7 @@ export const SceneViewer = forwardRef<ViewerHandle, Props>(function SceneViewer(
     if (!r) return;
     let cancelled = false;
     setLoaded(false);
+    r.floorLevels = scene.rooms.map((room) => room.floorZ);
     disposeGroup(r.building);
     r.building.add(architecture(scene));
     architectureView(r, r.overview);

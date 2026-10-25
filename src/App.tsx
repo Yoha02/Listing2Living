@@ -27,11 +27,17 @@ import {
   WandSparkles,
   X,
 } from 'lucide-react';
-import type { AppState, PlacementPatch, SceneObject, Source } from '../shared/types';
+import type { AppState, PlacementPatch, SceneObject } from '../shared/types';
 import type { WalkerPose } from '../shared/navigation';
 import { PlanView } from './PlanView';
 import { SceneViewer, type ViewerHandle } from './SceneViewer';
 import { ApprovalDialog, VisualReviewPanel } from './WorkflowReview';
+import {
+  IntakeDialog,
+  RoomEvidencePanel,
+  WorkspacePicker,
+  type SavedWorkspace,
+} from './PropertyEvidence';
 
 const LISTING =
   'https://www.zillow.com/homedetails/200-Brannan-St-APT-114-San-Francisco-CA-94107/69817820_zpid/';
@@ -230,12 +236,25 @@ export default function App() {
     [help, setHelp] = useState(false),
     [notification, setNotification] = useState(''),
     [catalog, setCatalog] = useState<SceneObject[]>([]),
-    [planReviewOpen, setPlanReviewOpen] = useState(false);
+    [planReviewOpen, setPlanReviewOpen] = useState(false),
+    [savedWorkspaces, setSavedWorkspaces] = useState<SavedWorkspace[]>([]),
+    [intakeChecking, setIntakeChecking] = useState(false);
   const viewer = useRef<ViewerHandle>(null),
     mutation = useRef(false),
     lastPoll = useRef(0),
     lastApprovalKey = useRef(''),
     lastAssessmentKey = useRef('');
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const response = await fetch('/api/workspaces');
+      if (response.ok) {
+        const result = await response.json();
+        setSavedWorkspaces(result.workspaces || []);
+      }
+    } catch {
+      /* The active home remains usable while the saved list reconnects. */
+    }
+  }, []);
   const poll = useCallback(async () => {
     try {
       const request = Date.now();
@@ -244,6 +263,7 @@ export default function App() {
       const next = (await res.json()) as AppState;
       if (!mutation.current && request >= lastPoll.current) {
         setState(next);
+        if (!next.busy) setIntakeChecking(false);
         lastPoll.current = request;
       }
       setLoadError('');
@@ -253,13 +273,34 @@ export default function App() {
   }, []);
   useEffect(() => {
     poll();
+    refreshWorkspaces();
     fetch('/api/catalog')
       .then((r) => (r.ok ? r.json() : []))
       .then(setCatalog)
       .catch(() => {});
     const interval = setInterval(poll, 1800);
-    return () => clearInterval(interval);
-  }, [poll]);
+    const workspaceInterval = setInterval(refreshWorkspaces, 6000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(workspaceInterval);
+    };
+  }, [poll, refreshWorkspaces]);
+  const workspaceIdentity = state?.workspaceId || state?.scene.id;
+  useEffect(() => {
+    if (!state) return;
+    setSelected(null);
+    setActiveFloorZ(state.scene.levels?.[0]?.floorZ ?? 0);
+    setCamera('overview');
+    setWalking(false);
+    setWalkPose(null);
+    setActiveSource('');
+    setCompare(false);
+    setShowChecks(false);
+    setPlanReviewOpen(false);
+    setUrl(state.scene.listingUrl);
+    lastApprovalKey.current = '';
+    lastAssessmentKey.current = '';
+  }, [workspaceIdentity]);
   useEffect(() => {
     const workflow = state?.workflow;
     if (!workflow) return;
@@ -286,6 +327,7 @@ export default function App() {
       if (mutation.current) return;
       mutation.current = true;
       setPending(label);
+      if (path === 'intake') setIntakeChecking(true);
       setError('');
       try {
         const response = await fetch(`/api/${path}`, {
@@ -296,6 +338,7 @@ export default function App() {
         const data = await response.json();
         if (!response.ok)
           throw Error(data.error || data.message || `Request failed (${response.status})`);
+        lastPoll.current = Date.now();
         if (data.scene) {
           setState(data);
           lastPoll.current = Date.now();
@@ -307,6 +350,30 @@ export default function App() {
           lastApprovalKey.current = '';
           setNotification(
             'Reading the listing. You will review the plan and items before we build.',
+          );
+        }
+        if (path === 'intake') {
+          setPipeline(true);
+          setNotification('Checking this listing. Your current home remains open.');
+        }
+        if (path === 'workspaces/select') {
+          setUrlOpen(false);
+          setNotification('Your saved home is open.');
+          refreshWorkspaces();
+        }
+        if (
+          path === 'refresh-sources' ||
+          path === 'review-rooms' ||
+          path === 'repair-room-appearance'
+        ) {
+          setPipeline(true);
+          setTab('sources');
+          setNotification(
+            path === 'repair-room-appearance'
+              ? 'Refining room finishes from source photos, then comparing the results.'
+              : path === 'refresh-sources'
+                ? 'Looking for room-specific evidence and finishes. Follow the live steps below.'
+                : 'Rendering and comparing each room with its matched sources.',
           );
         }
         if (path === 'approve' || path === 'visual-repair') {
@@ -325,6 +392,7 @@ export default function App() {
         if (path === 'visual-review') setShowChecks(true);
         return data;
       } catch (e) {
+        if (path === 'intake') setIntakeChecking(false);
         setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
       } finally {
         mutation.current = false;
@@ -332,7 +400,7 @@ export default function App() {
         poll();
       }
     },
-    [poll],
+    [poll, refreshWorkspaces],
   );
   if (!state)
     return (
@@ -361,7 +429,7 @@ export default function App() {
     );
   const scene = state.scene,
     object = scene.objects.find((o) => o.id === selected),
-    busy = !!pending || state.busy,
+    busy = !!pending || state.busy || intakeChecking,
     photos = scene.sources.filter((s) => s.kind === 'photo' || s.kind === 'plan'),
     source =
       photos.find((s) => s.id === activeSource) ||
@@ -399,40 +467,18 @@ export default function App() {
     if (image) act('visual-review', { image }, 'Argon is inspecting the view');
     else setError('The 3D view is not ready to capture yet.');
   };
-  const sourceCard = (s: Source) => (
-    <button
-      className={`source-card ${activeSource === s.id ? 'active' : ''}`}
-      key={s.id}
-      onClick={() => {
-        setActiveSource(s.id);
-        setCompare(true);
-      }}
-    >
-      {s.kind !== 'listing' && <img src={s.localUrl || s.url} alt={s.label} loading="lazy" />}
-      <span>{s.kind === 'plan' ? 'FLOOR PLAN' : 'SOURCE PHOTO'}</span>
-      <strong>{s.label}</strong>
-      <span className="source-open">
-        Compare with your home <ArrowUpRight size={13} />
-      </span>
-    </button>
-  );
   return (
     <main className="app-shell">
       <header className="topbar">
         <Brand />
-        <div className="property-header">
-          <span className="property-dot" />
-          <span>
-            200 Brannan Street <span className="muted">/ Loft 114</span>
-          </span>
-          <button
-            aria-label="Change listing URL"
-            className="icon-button"
-            onClick={() => setUrlOpen(!urlOpen)}
-          >
-            <ChevronDown size={15} />
-          </button>
-        </div>
+        <WorkspacePicker
+          currentId={state.workspaceId}
+          title={scene.title}
+          workspaces={savedWorkspaces}
+          pending={busy}
+          onSelect={(id) => act('workspaces/select', { id }, 'Opening your saved home')}
+          onNew={() => setUrlOpen(true)}
+        />
         <div className="topbar-actions">
           <span
             className={`connection ${state.model.configured ? 'connected' : ''}`}
@@ -462,34 +508,23 @@ export default function App() {
           </button>
         </div>
       </header>
-      {urlOpen && (
-        <form
-          className="url-bar"
-          onSubmit={(e) => {
-            e.preventDefault();
-            act('build', { url }, 'Starting reconstruction');
-          }}
-        >
-          <Link2 size={17} />
-          <input
-            aria-label="Property listing URL"
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            required
-          />
-          <button type="submit" className="primary-button" disabled={busy}>
-            Analyze listing <ArrowRight size={16} />
-          </button>
+      {state.intake && !urlOpen && (
+        <div className="intake-resume-banner">
+          <span>
+            <Link2 size={13} />{' '}
+            {state.intake.status === 'ready'
+              ? 'A listing has sources ready to review.'
+              : 'Your latest listing check needs attention.'}
+          </span>
           <button
-            type="button"
-            className="icon-button"
-            aria-label="Close URL entry"
-            onClick={() => setUrlOpen(false)}
+            onClick={() => {
+              setUrl(state.intake!.url);
+              setUrlOpen(true);
+            }}
           >
-            <X size={17} />
+            View listing check <ArrowRight size={13} />
           </button>
-        </form>
+        </div>
       )}
       {state.workflow?.phase === 'awaiting-approval' && (
         <div className="approval-banner">
@@ -516,7 +551,7 @@ export default function App() {
             </h1>
             <p>A new perspective on your next place.</p>
             <button className="analyze-entry" onClick={() => setUrlOpen(true)}>
-              <Link2 size={12} /> Analyze a listing <ArrowRight size={12} />
+              <Link2 size={12} /> Check a listing <ArrowRight size={12} />
             </button>
           </div>
           <nav className="rail-tabs" aria-label="Workspace tools">
@@ -553,12 +588,20 @@ export default function App() {
                     <div className="eyebrow">YOUR HOME, YOUR WAY</div>
                     <h2>{currentLevel.label}</h2>
                   </div>
-                  <span className="small-tag">{activeFloorZ > 0 ? '~88 m²' : '~40 m²'}</span>
+                  <span className="small-tag">
+                    {
+                      scene.rooms.filter((room) => Math.abs(room.floorZ - activeFloorZ) < 0.08)
+                        .length
+                    }{' '}
+                    rooms
+                  </span>
                 </div>
                 <p className="panel-caption">
-                  {activeFloorZ > 0
-                    ? 'Two bedrooms, hallway & quiet corners.'
-                    : 'Entry, kitchen & everyday moments.'}
+                  {scene.rooms
+                    .filter((room) => Math.abs(room.floorZ - activeFloorZ) < 0.08)
+                    .slice(0, 3)
+                    .map((room) => room.name)
+                    .join(' · ')}
                 </p>
                 <PlanView
                   scene={scene}
@@ -688,30 +731,22 @@ export default function App() {
               </>
             )}
             {tab === 'sources' && (
-              <>
-                <div className="panel-heading">
-                  <div>
-                    <div className="eyebrow">BUILT FROM EVIDENCE</div>
-                    <h2>The original place.</h2>
-                  </div>
-                </div>
-                <p className="panel-caption">Compare the model with its source material.</p>
-                <div className="source-list">{photos.map(sourceCard)}</div>
-                <a
-                  className="listing-link"
-                  href={scene.listingUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open the original listing <ArrowUpRight size={14} />
-                </a>
-                <details className="source-details">
-                  <summary>What we know & what we estimate</summary>
-                  {scene.notes.map((note, i) => (
-                    <p key={i}>{note}</p>
-                  ))}
-                </details>
-              </>
+              <RoomEvidencePanel
+                scene={scene}
+                reviews={state.workflow?.roomReviews}
+                floorZ={activeFloorZ}
+                pending={busy}
+                canReview={canInspect}
+                onSource={(entry) => {
+                  setActiveSource(entry.id);
+                  setCompare(true);
+                }}
+                onRefresh={() => act('refresh-sources', {}, 'Finding evidence for each room')}
+                onReview={() => act('review-rooms', {}, 'Rendering and reviewing each room')}
+                onRepair={() =>
+                  act('repair-room-appearance', {}, 'Refining source-informed room finishes')
+                }
+              />
             )}
           </div>
           <div className="sidebar-bottom">
@@ -722,6 +757,7 @@ export default function App() {
         <section className="main-stage" aria-label="Home exploration workspace">
           <div className="viewport">
             <SceneViewer
+              key={workspaceIdentity}
               ref={viewer}
               scene={scene}
               selected={selected}
@@ -977,7 +1013,7 @@ export default function App() {
                 <>
                   <div className="route-results">
                     {state.verification.routes.map((r) => (
-                      <div key={r.targetId}>
+                      <div key={`${r.targetId}-${r.floorZ ?? 0}`}>
                         <span className={`result-dot ${r.passed ? 'pass' : 'fail'}`}>
                           {r.passed ? <Check size={11} /> : <X size={11} />}
                         </span>
@@ -1123,7 +1159,7 @@ export default function App() {
                 model activity is shown when it runs.
               </p>
               <button disabled={busy} onClick={() => setUrlOpen(true)}>
-                <Link2 size={13} /> Analyze a listing
+                <Link2 size={13} /> Check a listing
               </button>
             </div>
             <div className="event-list">
@@ -1155,8 +1191,8 @@ export default function App() {
                 ))
               ) : (
                 <div className="event-empty">
-                  The event-built Brannan starter is ready to explore. Start the URL pipeline above
-                  to run the agents.
+                  Your home is ready to explore. Check a listing to gather source evidence and begin
+                  a new reconstruction.
                 </div>
               )}
             </div>
@@ -1193,8 +1229,26 @@ export default function App() {
           onApprove={(mode, items) => act('approve', { mode, items }, 'Approving your selections')}
           onAnalyze={() => {
             setPlanReviewOpen(false);
-            act('build', { url: scene.listingUrl }, 'Analyzing the source evidence');
+            setUrl(scene.listingUrl);
+            setUrlOpen(true);
           }}
+        />
+      )}
+      {urlOpen && (
+        <IntakeDialog
+          url={url}
+          onUrl={setUrl}
+          intake={state.intake}
+          pending={busy}
+          checking={
+            intakeChecking ||
+            (state.busy && /intake|checking.*listing|listing.*check/i.test(state.lastAction))
+          }
+          onCheck={() => act('intake', { url }, 'Checking the listing')}
+          onBuild={() =>
+            act('build', { url: state.intake?.url || url }, 'Interpreting the approved sources')
+          }
+          onClose={() => setUrlOpen(false)}
         />
       )}
       {help && (
@@ -1215,7 +1269,7 @@ export default function App() {
             </button>
             <div className="eyebrow">WELCOME TO LISTING2LIVING</div>
             <h2 id="help-title">Step inside your next home.</h2>
-            <p>Explore both floors of Brannan, then make room for the way you live.</p>
+            <p>Explore your home, then make room for the way you live.</p>
             <ul>
               <li>
                 <strong>Explore:</strong> drag to orbit, scroll to zoom, or choose a camera view.

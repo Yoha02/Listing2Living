@@ -192,6 +192,25 @@ test('Brannan baseline passes, deliberate obstruction fails, and repair restores
     );
 });
 
+test('repair retains its search opportunity when the process is descheduled under load', (t) => {
+  const input = JSON.parse(
+    readFileSync(new URL('../shared/brannan.json', import.meta.url), 'utf8'),
+  ) as SceneSpec;
+  const blocked = createStressTest(input);
+  let elapsed = 0;
+  // Simulate the multi-second scheduling gaps seen while Blender and test workers compete.
+  // The old wall-clock deadline expired before checking even one placement.
+  t.mock.method(performance, 'now', () => (elapsed += 10_000));
+  const repaired = suggestRepair(blocked);
+  assert.equal(verifyScene(repaired.scene).passed, true, repaired.summary);
+  assert.ok(repaired.changes.length > 0);
+  for (const original of blocked.objects) {
+    const after = repaired.scene.objects.find((object) => object.id === original.id)!;
+    assert.deepEqual(after.dimensions, original.dimensions);
+    if (!original.movable || original.pinned) assert.deepEqual(after, original);
+  }
+});
+
 test('Brannan stair route approaches the lower window-side end, not the upper landing', () => {
   const input = JSON.parse(
     readFileSync(new URL('../shared/brannan.json', import.meta.url), 'utf8'),

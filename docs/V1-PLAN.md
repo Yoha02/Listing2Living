@@ -10,11 +10,13 @@ The hackathon track is **More Dimensions**: generate a world, render it, inspect
 
 ```mermaid
 flowchart TD
-  URL[Listing URL] --> E[Evidence collector: plan and photos]
+  URL[Listing URL] --> I{Intake: private photos and scaled plan?}
+  I -->|Missing| NEED[Keep current home; report missing inputs]
+  I -->|Sufficient| E[Property-scoped evidence collector]
   E --> P[Floor-plan interpreter: canonical scene and uncertainty]
   P --> A[Photo-item agent: identities, estimated dimensions, sources]
   P --> S[Structure and openings review]
-  E --> M[Materials review]
+  E --> M[Room-to-photo mapping and source-based finishes]
   A --> H{Human approval}
   S --> H
   M --> H
@@ -24,13 +26,14 @@ flowchart TD
   B --> G[Geometry checks: collisions, boundaries, routes]
   G -->|Failures| R[Placement repair proposal]
   R --> G
-  G --> V[Fresh furnished render]
-  V --> J[Argon source/render critic]
+  G --> V[Fresh furnished render for every room]
+  V --> J[Per-room source/render critic]
   J -->|Placement or finish issue| R2[Bounded visual repair]
   R2 --> B
   J -->|Structural uncertainty| H
   J -->|Checks pass and rubric met| READY[Ready for human review]
   J -->|Limit reached or no improvement| HUMAN[Human review with unresolved findings]
+  J --> SAVE[Save this property, reviews and immutable assets]
 ```
 
 ## Agent responsibilities and contracts
@@ -67,7 +70,7 @@ The approval screen shows room dimensions first, then a concise card per propose
 3. Never accept a repair that blocks a previously reachable destination. Preserve approved sizes and fixed architecture.
 4. Render the furnished accepted scene, then send that fresh image and source photos to Argon.
 5. Use a provisional 0–100 rubric for layout consistency, object consistency and material consistency, with an initial threshold of 70 in each category. These scores are model judgements, not calibrated accuracy metrics.
-6. Mark ready for human review only when geometry passes, the review matches the current revision, source evidence is available, each rubric threshold is met, and no major finding remains.
+6. Mark ready for human review only when geometry passes and every room has a current render, matched source evidence, passing rubric scores and no major mismatch. A strong single-view score cannot accept the whole home.
 7. A visual repair may adjust movable placements and finishes. It must pass geometry again and receive a fresh render review. Cap automatic attempts at two and stop on no improvement.
 8. Structural discrepancies, missing evidence and unresolved findings remain visible for a person. Do not force a green status to satisfy the demo.
 
@@ -75,9 +78,9 @@ The approval screen shows room dimensions first, then a concise card per propose
 
 Included: one supported listing, lower foyer/kitchen/living and upper bedrooms/hallway/bathroom/laundry/closets, source comparison, human approval, procedural furnishings, linked 2D/3D editor, live Argon calls, actual Blender assembly, floor-aware route tests, bounded repair, revision-aware visual findings, scene export and saved local artifacts. A level selector synchronizes plan and 3D view. First-person controls use WASD movement, arrow-key or mouse-drag look, and smooth stair elevation; Escape restores orbit controls.
 
-Deferred: arbitrary listing ingestion, exact real-estate measurement, photogrammetry, Gaussian splat training, retailer asset scraping, photorealistic object recovery, cloud hosting of Blender, and automatic structural renovation. These add substantial uncertainty without strengthening the core three-minute proof.
+Additional Zillow property URLs now have live intake and source-derived reconstruction with strict validation. Other website adapters, reliable reconstruction of every complex multi-floor plan, exact measurement, photogrammetry, Gaussian splat training, retailer asset scraping, photorealistic object recovery, cloud hosting of Blender and automatic structural renovation remain outside this prototype's proven scope.
 
-The second-floor extension preserves the saved lower-floor arrangement, adds source-traced rooms at an inferred 2.85 m elevation, invalidates old rendered-review freshness, and rebuilds the architectural artifact. Existing furniture edits and repairs preserve their original floor. Navigation checks are per level; they are not a certification of staircase safety or accessibility. Upstairs photo evidence is currently incomplete, so the critic must retain that limitation.
+The second-floor extension preserves the saved lower-floor arrangement, adds source-traced rooms at an inferred 2.85 m elevation, invalidates old rendered-review freshness, and rebuilds the architectural artifact. Existing furniture edits and repairs preserve their original floor. Navigation checks are per level; they are not a certification of staircase safety or accessibility. The expanded gallery matches photos to 11 of 13 rooms; entry and linen closets still lack direct photographs. Structural differences such as the east bedroom's raised area remain review findings.
 
 ## Acceptance evidence
 

@@ -578,8 +578,14 @@ export function suggestRepair(scene: SceneSpec): {
       changes: [],
       summary: 'All geometric checks already pass; no furniture was moved.',
     };
-  const deadline = performance.now() + 4000,
+  // Bound work rather than elapsed wall time. Other render/model/test processes can
+  // deschedule this thread; that must not consume its entire search before any trial.
+  const maxPlacementChecks = 6000,
+    maxRouteChecks = 120,
+    maxPositionsPerObject = 6000,
     changes: PlacementPatch[] = [];
+  let placementChecks = 0,
+    routeChecks = 0;
   const implicated = new Set(current.issues.flatMap((i) => i.objectIds));
   const movable = result.objects
     .filter((o) => o.movable && !o.pinned && o.kind !== 'rug')
@@ -589,13 +595,16 @@ export function suggestRepair(scene: SceneSpec): {
         distance([a.position[0], a.position[1]], result.navigation.start) -
           distance([b.position[0], b.position[1]], result.navigation.start),
     );
-  for (const original of movable) {
-    if (current.passed || performance.now() > deadline) break;
+  for (const original of movable.slice(0, 8)) {
+    if (current.passed || placementChecks >= maxPlacementChecks || routeChecks >= maxRouteChecks)
+      break;
     const floorZ = objectFloorZ(result, original);
     if (floorZ === undefined) continue;
     const index = result.objects.findIndex((o) => o.id === original.id);
     const candidates: SceneObject[] = [];
-    for (const room of result.rooms.filter((r) => Math.abs(r.floorZ - floorZ) < 0.1)) {
+    candidatePositions: for (const room of result.rooms.filter(
+      (r) => Math.abs(r.floorZ - floorZ) < 0.1,
+    )) {
       const minX = Math.min(...room.polygon.map((p) => p[0])),
         maxX = Math.max(...room.polygon.map((p) => p[0]));
       const minY = Math.min(...room.polygon.map((p) => p[1])),
@@ -608,7 +617,8 @@ export function suggestRepair(scene: SceneSpec): {
               position: [x, y, original.position[2]] as SceneObject['position'],
               rotation,
             };
-            if (validPlacement(result, candidate)) candidates.push(candidate);
+            candidates.push(candidate);
+            if (candidates.length >= maxPositionsPerObject) break candidatePositions;
           }
     }
     candidates.sort(
@@ -618,8 +628,20 @@ export function suggestRepair(scene: SceneSpec): {
         (Math.abs(a.rotation - original.rotation) - Math.abs(b.rotation - original.rotation)) * 0.1,
     );
     let best: { object: SceneObject; verification: Verification; score: number } | undefined;
-    for (const candidate of candidates.slice(0, 80)) {
-      if (performance.now() > deadline) break;
+    let validCandidates = 0;
+    // Check nearby positions first and stop after the same 80 valid candidates as
+    // before; do not exhaustively validate distant positions that cannot be used.
+    for (const candidate of candidates) {
+      if (
+        placementChecks >= maxPlacementChecks ||
+        routeChecks >= maxRouteChecks ||
+        validCandidates >= 80
+      )
+        break;
+      placementChecks++;
+      if (!validPlacement(result, candidate)) continue;
+      validCandidates++;
+      routeChecks++;
       const trial = {
         ...result,
         objects: result.objects.map((o, i) => (i === index ? candidate : o)),

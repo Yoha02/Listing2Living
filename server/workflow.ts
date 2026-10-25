@@ -127,7 +127,7 @@ export function normalizePlan(raw: unknown, scene: SceneSpec): PlanInterpretatio
     if (!ids.has(room.roomId) || seen.has(room.roomId))
       throw new Error('Floor-plan interpretation contains an unknown or duplicate room.');
     seen.add(room.roomId);
-    const known = labels[room.roomId];
+    const known = scene.id === 'brannan-lower-floor' ? labels[room.roomId] : undefined;
     const matches =
       known &&
       ((Math.abs(room.width - known[0]) < 0.06 && Math.abs(room.depth - known[1]) < 0.06) ||
@@ -196,12 +196,21 @@ export function proposalSet(
   const suggested = ['sofa', 'desk', 'rug'].map((kind) => {
     const item = catalog.find((o) => o.kind === kind);
     if (!item) throw new Error('Suggested furniture is missing from the catalog.');
+    const position = [...item.position] as [number, number, number];
+    if (scene.id !== 'brannan-lower-floor') {
+      const room = scene.rooms.find((r) => /living|lounge|family/i.test(r.name)) || scene.rooms[0];
+      const xs = room.polygon.map((p) => p[0]),
+        ys = room.polygon.map((p) => p[1]);
+      position[0] = (Math.min(...xs) + Math.max(...xs)) / 2;
+      position[1] = (Math.min(...ys) + Math.max(...ys)) / 2;
+      position[2] = room.floorZ + item.dimensions[2] / 2;
+    }
     return {
       id: 'suggested-' + kind,
       name: item.name,
       kind: item.kind,
       dimensions: [...item.dimensions],
-      position: [...item.position],
+      position,
       rotation: item.rotation,
       color: item.color,
       sourceIds: [],

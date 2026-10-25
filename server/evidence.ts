@@ -37,7 +37,7 @@ async function download(url: string, name: string): Promise<{ localUrl: string; 
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > 10_000_000) throw new Error('Image exceeds source limit.');
   await readImagePart('data:image/jpeg;base64,' + bytes.toString('base64'));
-  await fs.mkdir('public/evidence', { recursive: true });
+  await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.writeFile(destination, bytes);
   return { localUrl: '/evidence/' + name, cached: false };
 }
@@ -85,16 +85,26 @@ export async function collectEvidence(
   let cachedCount = 0,
     liveCount = 0,
     failedCount = 0;
-  for (const source of sources.filter((s) => s.kind !== 'listing').slice(0, 6)) {
-    delete source.localUrl;
+  for (const source of sources.filter((s) => s.kind !== 'listing').slice(0, 40)) {
     try {
+      if (
+        source.localUrl &&
+        /^\/evidence\/[A-Za-z0-9_/-]+\.(png|jpg|webp)$/.test(source.localUrl)
+      ) {
+        await readImagePart(path.join('public', source.localUrl));
+        cachedCount++;
+        continue;
+      }
       const result = await download(
         source.url,
-        source.id.replace(/[^a-zA-Z0-9_-]/g, '-') + (source.url.includes('.png') ? '.png' : '.jpg'),
+        'zillow-69817820/' +
+          source.id.replace(/[^a-zA-Z0-9_-]/g, '-') +
+          (source.url.includes('.png') ? '.png' : '.jpg'),
       );
       source.localUrl = result.localUrl;
       result.cached ? cachedCount++ : liveCount++;
     } catch {
+      delete source.localUrl;
       failedCount++;
     }
   }

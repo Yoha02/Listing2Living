@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { projectContext, projectDirectory } from './workspaces.js';
 try {
   process.loadEnvFile('.env');
 } catch {}
@@ -104,10 +105,13 @@ export async function askArgon<T>(
           .join('\n')
       : '');
   const value = parseModelObject(text) as T;
-  await fs.mkdir('runtime/interactions', { recursive: true });
+  const interactionDirectory = projectContext.getStore()
+    ? path.join(projectDirectory(projectContext.getStore()!), 'interactions')
+    : 'runtime/interactions';
+  await fs.mkdir(interactionDirectory, { recursive: true });
   const id = Date.now() + '-' + Math.random().toString(36).slice(2, 6);
   await fs.writeFile(
-    path.join('runtime/interactions', id + '.json'),
+    path.join(interactionDirectory, id + '.json'),
     JSON.stringify(
       {
         model: modelName,

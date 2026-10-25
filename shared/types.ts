@@ -7,6 +7,15 @@ export interface Room {
   polygon: Vec2[];
   floorZ: number;
   ceilingHeight: number;
+  sourceIds?: string[];
+  appearance?: {
+    wallColor: string;
+    floorColor: string;
+    floorMaterial: 'wood' | 'tile' | 'carpet' | 'concrete';
+    ceilingColor: string;
+    details: string[];
+    basis: 'photo' | 'inferred';
+  };
 }
 export interface Opening {
   id: string;
@@ -73,6 +82,37 @@ export interface Source {
   url: string;
   kind: 'photo' | 'plan' | 'listing';
   localUrl?: string;
+  roomIds?: string[];
+  floorZ?: number;
+}
+export interface IntakeReport {
+  id: string;
+  url: string;
+  title: string;
+  status: 'ready' | 'needs-input' | 'failed';
+  summary: string;
+  checks: { id: string; label: string; passed: boolean; detail: string }[];
+  sources: Source[];
+  roomHints: string[];
+  createdAt: string;
+}
+export interface PropertyWorkspace {
+  id: string;
+  title: string;
+  url: string;
+  updatedAt: string;
+  roomCount: number;
+}
+export interface RoomAssessment {
+  roomId: string;
+  roomName: string;
+  revision: number;
+  status: 'ready-for-human-review' | 'needs-repair' | 'insufficient-evidence';
+  sourceIds: string[];
+  renderUrl?: string;
+  scores: { layout: number; objects: number; materials: number };
+  summary: string;
+  recommendations: string[];
 }
 export interface SceneSpec {
   id: string;
@@ -187,6 +227,8 @@ export interface WorkflowState {
   approvalMode?: 'reviewed' | 'suggested';
   approvedAssetIds: string[];
   review?: VisualAssessment;
+  roomReviews?: RoomAssessment[];
+  roomRepairIterations?: number;
   iterations: number;
   maxIterations: number;
 }
@@ -202,6 +244,8 @@ export interface AppState {
   visualIssues?: Issue[];
   visualReviewRevision?: number;
   workflow?: WorkflowState;
+  workspaceId?: string;
+  intake?: IntakeReport;
 }
 export interface PlacementPatch {
   objectId: string;

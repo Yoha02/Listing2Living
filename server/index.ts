@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer as createViteServer } from 'vite';
 import { z } from 'zod';
 import fixture from '../shared/brannan.json';
+import curatedSources from '../shared/brannan-sources.json';
 import catalogData from '../shared/catalog.json';
 import type {
   AppState,
@@ -21,8 +22,23 @@ import type {
 import { verifyScene, suggestRepair, createStressTest } from '../shared/verification.js';
 import { addMissingLevels } from '../shared/scene-upgrade.js';
 import { askArgon, configured, modelName, safeError } from './argon.js';
-import { collectEvidence, validateListing } from './evidence.js';
-import { buildBlender, renderPathForModel } from './blender.js';
+import { collectEvidence, demoUrl } from './evidence.js';
+import { inspectListing, propertyKey, reconstructScene } from './intake.js';
+import { buildBlender, renderPathForModel, roomRenderPathsForModel } from './blender.js';
+import {
+  enrichRoomSources,
+  evaluateRooms,
+  aggregateRoomReviews,
+  refineRoomFinishes,
+} from './rooms.js';
+import {
+  saveWorkspace,
+  loadWorkspace,
+  listWorkspaces,
+  archiveWorkspace,
+  projectContext,
+  projectDirectory,
+} from './workspaces.js';
 import {
   planSchema,
   assetsSchema,
@@ -37,7 +53,6 @@ import {
   visualImproved,
   retainHumanFindings,
 } from './workflow.js';
-
 const vectorSchema = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 const patchSchema = z.object({
   objectId: z.string(),
@@ -89,7 +104,6 @@ const replySchemas: Record<string, z.ZodType> = {
   visual: assessmentSchema,
   'visual-repair': z.object({ patches: z.array(patchSchema).max(20), summary: z.string() }),
 };
-
 const catalog = catalogData as SceneObject[];
 const initial = structuredClone(fixture) as SceneSpec;
 const history: SceneSpec[] = [];
@@ -105,9 +119,12 @@ const state: AppState = {
 };
 try {
   const saved = JSON.parse(await fs.readFile('runtime/state.json', 'utf8'));
-  if (saved.scene?.id === initial.id) {
+  if (saved.scene?.rooms?.length && saved.scene?.listingUrl) {
     verifyScene(saved.scene);
     state.scene = saved.scene;
+    state.workspaceId = saved.workspaceId || propertyKey(saved.scene.listingUrl);
+    state.intake = saved.intake;
+    if (Array.isArray(saved.history)) history.push(...saved.history.slice(-20));
     state.modelUrl = saved.modelUrl;
     state.visualReview = typeof saved.visualReview === 'string' ? saved.visualReview : undefined;
     state.visualIssues = Array.isArray(saved.visualIssues) ? saved.visualIssues : [];
@@ -135,7 +152,8 @@ if (!state.events.length) {
     });
   } catch {}
 }
-const upgradedScene = addMissingLevels(state.scene, initial);
+state.workspaceId ||= propertyKey(state.scene.listingUrl);
+const upgradedScene = state.scene.id === initial.id ? addMissingLevels(state.scene, initial) : null;
 if (upgradedScene) {
   await fs.mkdir('runtime', { recursive: true });
   await fs.writeFile(
@@ -156,7 +174,7 @@ if (upgradedScene) {
     'Upper rooms traced from the listing plan; floor height and vertical alignment are inferred. Existing furniture preserved.',
   );
 }
-if (state.scene.rooms.some((room) => room.floorZ > 0)) {
+if (state.scene.id === initial.id && state.scene.rooms.some((room) => room.floorZ > 0)) {
   state.scene.levels = structuredClone(initial.levels);
   state.scene.notes = state.scene.notes.map((note) =>
     note.startsWith('Stair direction anchor:')
@@ -171,7 +189,7 @@ if (state.modelUrl) {
     state.modelUrl = null;
   }
 }
-if (!state.modelUrl && !upgradedScene)
+if (!state.modelUrl && !upgradedScene && state.scene.id === initial.id)
   try {
     await fs.access('public/generated/brannan.glb');
     state.modelUrl = '/generated/brannan.glb?v=' + Date.now();
@@ -188,6 +206,9 @@ function save(): Promise<void> {
       visualReviewRevision: state.visualReviewRevision,
       workflow: state.workflow,
       events: state.events,
+      workspaceId: state.workspaceId,
+      intake: state.intake,
+      history,
     },
     null,
     2,
@@ -198,11 +219,12 @@ function save(): Promise<void> {
       await fs.mkdir('runtime', { recursive: true });
       await fs.writeFile('runtime/state.json.tmp', payload);
       await fs.rename('runtime/state.json.tmp', 'runtime/state.json');
+      await saveWorkspace(JSON.parse(payload));
     });
   saveQueue = pending;
   return pending;
 }
-if (upgradedScene) await save();
+await save();
 function snapshot() {
   return structuredClone({
     scene: state.scene,
@@ -212,6 +234,9 @@ function snapshot() {
     visualIssues: state.visualIssues,
     visualReviewRevision: state.visualReviewRevision,
     workflow: state.workflow,
+    workspaceId: state.workspaceId,
+    intake: state.intake,
+    events: state.events,
     history,
   });
 }
@@ -223,6 +248,9 @@ function rollback(saved: ReturnType<typeof snapshot>, message: string) {
   state.visualIssues = saved.visualIssues;
   state.visualReviewRevision = saved.visualReviewRevision;
   state.workflow = saved.workflow;
+  state.workspaceId = saved.workspaceId;
+  state.intake = saved.intake;
+  state.events = saved.events;
   history.splice(0, history.length, ...saved.history);
   state.lastAction = message + ' Previous scene and workflow preserved.';
 }
@@ -254,6 +282,14 @@ function checkpoint() {
   if (history.length > 20) history.shift();
 }
 function commit(scene: SceneSpec, message: string) {
+  const architecture = (s: SceneSpec) =>
+    JSON.stringify({
+      rooms: s.rooms,
+      walls: s.walls,
+      stairs: s.stairs,
+      objects: s.objects.filter((o) => !o.movable),
+    });
+  if (architecture(scene) !== architecture(state.scene)) state.modelUrl = null;
   scene.revision = state.scene.revision + 1;
   state.scene = scene;
   state.verification = verifyScene(scene);
@@ -333,6 +369,23 @@ function improves(before: Verification, after: Verification) {
   return after.passed || count(after) < count(before);
 }
 function recordVisualReview(review: VisualAssessment) {
+  const rooms = state.workflow?.roomReviews;
+  if (
+    review.status === 'ready-for-human-review' &&
+    (!rooms ||
+      rooms.length !== state.scene.rooms.length ||
+      rooms.some(
+        (r) => r.revision !== state.scene.revision || r.status !== 'ready-for-human-review',
+      ))
+  ) {
+    review = {
+      ...review,
+      status: 'insufficient-evidence',
+      summary:
+        review.summary +
+        ' Whole-home acceptance still requires a current passing source comparison for every room.',
+    };
+  }
   state.visualReview = review.summary;
   state.visualReviewRevision = review.revision;
   state.visualIssues = review.findings.map((finding): Issue => ({
@@ -347,6 +400,7 @@ function recordVisualReview(review: VisualAssessment) {
   state.workflow ??= emptyWorkflow();
   state.workflow.review = review;
   state.workflow.phase = review.status === 'ready-for-human-review' ? 'ready' : 'needs-review';
+  return review;
 }
 async function repairCurrent() {
   const before = state.scene;
@@ -358,7 +412,7 @@ async function repairCurrent() {
   const answer = await call<{ patches: PlacementPatch[]; summary: string }>(
     'repair',
     'Placement repair',
-    "You are Listing2Living layout repair agent. Correct the actual failures while preserving fixed/pinned objects, furniture dimensions, room geometry and each object's current floor elevation. Canonical metres XY floor, Z up, object position is CENTER and rotation radians. Only move existing movable objects, staying on their current floor, away from stairs. Upper floor has floorZ=2.85; never drop its items to ground level. Return {patches:[{objectId,position:[x,y,z],rotation}],summary}.\nScene: " +
+    "You are Listing2Living layout repair agent. Correct the actual failures while preserving fixed/pinned objects, furniture dimensions, room geometry and each object's current floor elevation. Canonical metres XY floor, Z up, object position is CENTER and rotation radians. Only move existing movable objects, staying on their current floor, away from stairs. Use each modeled room’s actual floorZ; never transfer items between floors during repair. Return {patches:[{objectId,position:[x,y,z],rotation}],summary}.\nScene: " +
       compact(before) +
       '\nFailures: ' +
       JSON.stringify(beforeChecks),
@@ -398,9 +452,38 @@ async function repairCurrent() {
   }
 }
 async function build(url: string) {
-  validateListing(url);
-  checkpoint();
-  state.events = [];
+  const intake = state.intake;
+  if (!intake || intake.id !== propertyKey(url) || intake.status !== 'ready')
+    throw new Error(
+      'Check this listing first. A readable scaled floor plan and enough interior photos are required.',
+    );
+  await save();
+  await archiveWorkspace({ ...snapshot(), workspaceId: state.workspaceId! });
+  if (intake.id !== state.workspaceId) {
+    try {
+      await archiveWorkspace(await loadWorkspace(intake.id));
+    } catch {}
+  }
+  const reconstructionEvents: PipelineEvent[] = [];
+  const scene =
+    intake.id === propertyKey(demoUrl)
+      ? (structuredClone(fixture) as SceneSpec)
+      : await reconstructScene(intake, (detail, status) => {
+          state.lastAction = detail;
+          event('plan', 'Reconstruct this property', status, detail, modelName);
+          reconstructionEvents.push(state.events.at(-1)!);
+        });
+  scene.revision = intake.id === state.workspaceId ? state.scene.revision + 1 : 1;
+  scene.sources = structuredClone(intake.sources);
+  const evidence = {
+    sources: scene.sources,
+    imagePaths: scene.sources
+      .filter((s) => s.localUrl)
+      .map((s) => path.join('public', s.localUrl!)),
+  };
+  state.workspaceId = intake.id;
+  history.splice(0);
+  state.events = reconstructionEvents;
   state.visualReview = undefined;
   state.visualIssues = [];
   state.visualReviewRevision = undefined;
@@ -411,11 +494,7 @@ async function build(url: string) {
     'running',
     'Collecting the source floor plan and observed interior views.',
   );
-  const evidence = await collectEvidence(url, (fixture as SceneSpec).sources);
-  event('sources', 'Read listing', evidence.mode === 'cached' ? 'cached' : 'done', evidence.detail);
-  const scene = structuredClone(fixture) as SceneSpec;
-  scene.revision = state.scene.revision + 1;
-  scene.sources = evidence.sources;
+  event('sources', 'Read listing', 'done', intake.summary);
   state.scene = scene;
   state.modelUrl = null;
   state.verification = verifyScene(scene);
@@ -427,7 +506,7 @@ async function build(url: string) {
   const planRaw = await call<any>(
     'surveyor',
     'Floor-plan interpreter',
-    'Interpret BOTH floors in the supplied plan. Return {summary,rooms:[{roomId,name,width,depth,ceilingHeight,dimensionBasis:"plan"|"inferred",confidence:"high"|"medium"|"low",evidence}],scaleNote,uncertainties:[string]}. Dimensions must be numeric METRES; read printed labels rather than inventing measurements. Ceiling height and vertical floor alignment are inferred. Room IDs must match the supplied seed, including upstairs bedrooms, hallway, bathroom, laundry and closets. Source-traced footprint is an existing event-created approximation and will remain the construction seed. Listing total1420sqft versus plan1379total/434lower/945upper must remain an unresolved source discrepancy.\nScene seed:' +
+    'Interpret every floor in the supplied plan. Return {summary,rooms:[{roomId,name,width,depth,ceilingHeight,dimensionBasis:"plan"|"inferred",confidence:"high"|"medium"|"low",evidence}],scaleNote,uncertainties:[string]}. Dimensions must be numeric METRES; read printed labels rather than inventing measurements. Ceiling height and vertical floor alignment are inferred. Room IDs must match the supplied scene. Preserve uncertainty and any contradictions stated in scene notes. Source-traced footprint is an approximation, not a survey.\nScene seed:' +
       compact(scene),
     sourcePaths('plan').slice(0, 1),
     6500,
@@ -469,7 +548,7 @@ async function build(url: string) {
     call<any>(
       'appearance',
       'Materials worker',
-      'Choose approximate source-consistent colors. Return {wallColor:"#rrggbb",cabinetColor:"#rrggbb",notes:[string]}. Interior photos show a concrete ceiling, reddish wood floor, dark kitchen cabinets, whitecountertops. These are appearance estimates.',
+      'Choose approximate source-consistent colors from the supplied actual photos. Return {wallColor:"#rrggbb",cabinetColor:"#rrggbb",notes:[string]}. These are appearance estimates; do not assume a particular style.',
       sourcePaths('photo').slice(0, 3),
       1200,
     ),
@@ -492,8 +571,12 @@ async function build(url: string) {
     ...plan.uncertainties.slice(0, 4),
     ...openings.findings.slice(0, 3),
   );
-  state.scene = scene;
-  state.verification = verifyScene(scene);
+  state.scene = await addSourceFixtures(
+    await enrichRoomSources(scene, (label, detail, failed) =>
+      event('room-sources', label, failed ? 'failed' : 'done', detail, modelName),
+    ),
+  );
+  state.verification = verifyScene(state.scene);
   state.workflow = {
     phase: 'awaiting-approval',
     plan,
@@ -524,7 +607,7 @@ async function inspectScene(scene: SceneSpec, image: string): Promise<VisualAsse
   const raw = await call<any>(
     'visual',
     'Rendered scene critic',
-    'The first image is a fresh rendered scene; subsequent images are source photos and then the source floor plan if present. Scope includes both floors. The plan supports upper bedrooms, hallway, bathroom, laundry and closets, but current source interior photos primarily show downstairs. Judge upstairs topology against the floor plan; do not claim upstairs material fidelity or full-house photo verification when upstairs photos are absent. Record missing upper-floor, bathroom and closet photo evidence as a limitation. A single current view may show only one floor; do not mark offscreen approved items missing. Inspect layout, approved object presence/scale, and material resemblance. Suggested staging objects intentionally differ from empty source photos: do not penalize their existence. Compare architecture to sources, objects to their current scene dimensions and finishes, accounting for camera mismatch. Stair bottom/top fields, when present, are explicit XY endpoints of the generated stair: bottom is lower, top is higher. Cross-check those endpoints before alleging reversed ascent; do not infer compass direction from image left/right. If the perspective is inconclusive, label uncertainty. Return {summary,scores:{layout:0..100,objects:0..100,materials:0..100},evidenceSufficient:boolean,findings:[{category:"placement"|"appearance"|"structure"|"evidence",severity:"major"|"minor",message,objectIds:[string],recommendation}]}. Scores are provisional model judgments;70 is a demo review threshold, NOT measured reconstruction accuracy or safety certification. Report unavailable evidence explicitly. Structural/source contradictions require human review. Scene:' +
+    'The first image is a fresh rendered view; subsequent images are source photos followed by a floor plan if present. Judge only rooms actually visible in the render and supported by the supplied photos. Do not claim full-house verification from a single view; each room has a separate final comparison. Inspect layout, approved item scale, and material resemblance. Optional staging may differ from empty listing photos. Camera mismatch alone is not an error. Record missing evidence honestly. Stair bottom/top fields are explicit XY endpoints; do not infer orientation from image left/right alone. Return {summary,scores:{layout:0..100,objects:0..100,materials:0..100},evidenceSufficient:boolean,findings:[{category:"placement"|"appearance"|"structure"|"evidence",severity:"major"|"minor",message,objectIds:[string],recommendation}]}. Scores are provisional model judgments;70 is a demo review threshold, not measured reconstruction accuracy. Structural contradictions require human plan review. Scene:' +
       compact(scene) +
       ' Checks:' +
       JSON.stringify(checks) +
@@ -564,6 +647,100 @@ async function renderScene(scene: SceneSpec): Promise<string> {
       '.',
   );
   return url;
+}
+async function reviewAllRooms() {
+  state.workflow ??= emptyWorkflow();
+  state.workflow.phase = 'review';
+  let fresh = false;
+  if (state.modelUrl) {
+    try {
+      const report = JSON.parse(
+        await fs.readFile(
+          path.join(path.dirname(renderPathForModel(state.modelUrl)), 'build-report.json'),
+          'utf8',
+        ),
+      );
+      fresh =
+        report.sceneId === state.scene.id &&
+        report.revision === state.scene.revision &&
+        Object.keys(report.roomRenders || {}).length === state.scene.rooms.length;
+    } catch {}
+  }
+  if (!fresh) state.modelUrl = await renderScene(state.scene);
+  const renders = await roomRenderPathsForModel(state.modelUrl!);
+  state.workflow.roomReviews = await evaluateRooms(state.scene, renders, (label, detail, failed) =>
+    event(
+      'room-review',
+      label,
+      failed ? 'failed' : detail.startsWith('Comparing') ? 'running' : 'done',
+      detail,
+      modelName,
+    ),
+  );
+  state.verification = verifyScene(state.scene);
+  recordVisualReview(
+    aggregateRoomReviews(state.scene, state.workflow.roomReviews, state.verification),
+  );
+  state.lastAction = state.workflow.review!.summary;
+  await save();
+}
+async function addSourceFixtures(scene: SceneSpec): Promise<SceneSpec> {
+  if (scene.id !== initial.id) return scene;
+  const manifest = JSON.parse(await fs.readFile('shared/brannan-fixtures.json', 'utf8'));
+  for (const object of manifest.objects as SceneObject[])
+    if (!scene.objects.some((o) => o.id === object.id)) scene.objects.push(structuredClone(object));
+  for (const camera of manifest.cameras || []) {
+    scene.cameras = scene.cameras.filter((c) => c.id !== camera.id);
+    scene.cameras.push(structuredClone(camera));
+  }
+  for (const update of manifest.navigationUpdates || []) {
+    const targets =
+      update.floorZ === 0
+        ? scene.navigation.targets
+        : scene.navigation.levels?.find((l) => l.floorZ === update.floorZ)?.targets;
+    const target = targets?.find((t) => t.id === update.targetId);
+    if (target) {
+      target.point = update.point;
+      target.label = update.label;
+    }
+  }
+  for (const note of manifest.notes || []) if (!scene.notes.includes(note)) scene.notes.push(note);
+  return scene;
+}
+async function refreshSources() {
+  await save();
+  await archiveWorkspace({ ...snapshot(), workspaceId: state.workspaceId! });
+  checkpoint();
+  event(
+    'sources',
+    'Find room references',
+    'running',
+    'Collecting matching source photos for every modeled room.',
+  );
+  let next = structuredClone(state.scene);
+  if (next.id === initial.id) {
+    const evidence = await collectEvidence(next.listingUrl, curatedSources as SceneSpec['sources']);
+    next.sources = evidence.sources;
+    event('sources', 'Listing gallery', 'done', evidence.detail);
+  } else {
+    const intake = await inspectListing(next.listingUrl, next.sources);
+    if (intake.status !== 'ready') throw new Error(intake.summary);
+    next.sources = intake.sources;
+  }
+  next = await enrichRoomSources(next, (label, detail, failed) =>
+    event('room-sources', label, failed ? 'failed' : 'done', detail, modelName),
+  );
+  next = await addSourceFixtures(next);
+  const beforeChecks = verifyScene(state.scene),
+    afterChecks = verifyScene(next);
+  if (hasRouteRegression(beforeChecks, afterChecks) || (beforeChecks.passed && !afterChecks.passed))
+    throw new Error(
+      'Source detail additions introduced a collision or blocked destination; previous scene retained.',
+    );
+  commit(next, 'Room sources and finishes updated. Building fresh room views for comparison.');
+  state.workflow!.roomReviews = [];
+  state.modelUrl = await renderScene(state.scene);
+  await reviewAllRooms();
 }
 async function approve(body: unknown) {
   checkpoint();
@@ -610,8 +787,9 @@ async function approve(body: unknown) {
   state.modelUrl = await renderScene(scene);
   state.workflow.phase = 'review';
   try {
-    const review = await inspectScene(scene, renderPathForModel(state.modelUrl));
-    recordVisualReview(review);
+    const review = recordVisualReview(
+      await inspectScene(scene, renderPathForModel(state.modelUrl)),
+    );
     state.lastAction =
       review.status === 'ready-for-human-review'
         ? 'The fresh scene passed geometric checks and the provisional visual threshold. Ready for your review.'
@@ -636,6 +814,7 @@ async function approve(body: unknown) {
     );
     await visualRepair();
   }
+  await reviewAllRooms();
   await save();
 }
 async function visualRepair() {
@@ -728,11 +907,11 @@ async function visualRepair() {
       state.verification.sceneRevision = candidate.revision;
       recordVisualReview(review);
       state.lastAction =
-        review.status === 'ready-for-human-review'
+        state.workflow.review?.status === 'ready-for-human-review'
           ? 'Visual repair improved the scene; geometric checks and provisional visual threshold pass.'
           : 'Visual repair improved the scene; unresolved findings remain visible.';
       await save();
-      if (review.status === 'ready-for-human-review') break;
+      if (state.workflow.review?.status === 'ready-for-human-review') break;
     } catch (error) {
       state.workflow.phase = 'needs-review';
       state.lastAction =
@@ -745,7 +924,6 @@ async function visualRepair() {
     state.workflow.phase = 'needs-review';
   await save();
 }
-
 function requestedFloor(value: unknown): number {
   const floorZ = value === undefined ? 0 : Number(value);
   if (
@@ -784,7 +962,16 @@ async function furnish(prompt: string, floorZ = 0) {
     const o = structuredClone(template);
     o.id = 'furniture-' + o.kind + '-' + randomUUID().slice(0, 6);
     const p = checkedVector(add.position);
-    o.position = [p?.[0] ?? o.position[0], p?.[1] ?? o.position[1], floorZ + o.dimensions[2] / 2];
+    const room =
+      next.rooms.find((r) => r.floorZ === floorZ && /living|bedroom|lounge/i.test(r.name)) ||
+      next.rooms.find((r) => r.floorZ === floorZ)!;
+    const xs = room.polygon.map((p) => p[0]),
+      ys = room.polygon.map((p) => p[1]);
+    o.position = [
+      p?.[0] ?? (Math.min(...xs) + Math.max(...xs)) / 2,
+      p?.[1] ?? (Math.min(...ys) + Math.max(...ys)) / 2,
+      floorZ + o.dimensions[2] / 2,
+    ];
     if (Number.isFinite(add.rotation)) o.rotation = add.rotation!;
     if (/^#[0-9a-f]{6}$/i.test(add.color || '')) o.color = add.color!;
     next.objects.push(o);
@@ -802,11 +989,38 @@ async function furnish(prompt: string, floorZ = 0) {
 }
 const app = express();
 app.disable('x-powered-by');
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'POST') return next();
+  const origin = req.get('origin');
+  if (origin) {
+    try {
+      const u = new URL(origin),
+        port = String(process.env.PORT || 5173);
+      if (
+        u.protocol !== 'http:' ||
+        !['localhost', '127.0.0.1'].includes(u.hostname) ||
+        u.port !== port
+      )
+        throw new Error();
+    } catch {
+      res.status(403).json({ error: 'Requests must come from this local studio.' });
+      return;
+    }
+  }
+  if (!req.is('application/json')) {
+    res.status(415).json({ error: 'Send application/json for studio changes.' });
+    return;
+  }
+  next();
+});
 app.use(express.json({ limit: '12mb' }));
 app.use('/generated', express.static(path.resolve('public/generated')));
 app.use('/evidence', express.static(path.resolve('public/evidence')));
 app.get('/api/state', (_req, res) => res.json(state));
 app.get('/api/catalog', (_req, res) => res.json(catalog));
+app.get('/api/workspaces', async (_req, res) =>
+  res.json({ activeId: state.workspaceId, workspaces: await listWorkspaces() }),
+);
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, model: modelName, configured, busy: state.busy }),
 );
@@ -825,7 +1039,7 @@ function mutation(route: string, handler: (body: any) => Promise<void> | void) {
     const previous = snapshot();
     state.busy = true;
     try {
-      await handler(req.body || {});
+      await projectContext.run(state.workspaceId!, () => handler(req.body || {}));
       await save();
       res.json({ ...state, busy: false });
     } catch (e) {
@@ -848,14 +1062,25 @@ function backgroundJob(route: string, prepare: (body: any) => () => Promise<void
       const run = prepare(req.body || {}),
         previous = snapshot();
       state.busy = true;
-      void run()
+      const contextId = req.body?.url ? propertyKey(String(req.body.url)) : state.workspaceId!;
+      void projectContext
+        .run(contextId, run)
         .catch((e) => {
           rollback(previous, safeError(e));
           event('workflow', 'Workflow stopped', 'failed', state.lastAction);
         })
-        .finally(() => {
-          state.busy = false;
-          void save();
+        .finally(async () => {
+          try {
+            await save();
+          } catch (error) {
+            state.lastAction =
+              'The latest job could not be saved: ' +
+              safeError(error) +
+              '. Keep the studio open and retry saving before switching homes.';
+            event('storage', 'Save home', 'failed', state.lastAction);
+          } finally {
+            state.busy = false;
+          }
         });
       res.status(202).json({ started: true });
     } catch (e) {
@@ -863,8 +1088,114 @@ function backgroundJob(route: string, prepare: (body: any) => () => Promise<void
     }
   });
 }
+backgroundJob('/api/intake', (body) => {
+  const url = String(body.url || '');
+  propertyKey(url);
+  return async () => {
+    state.intake = undefined;
+    state.lastAction = 'Checking listing photos and floor-plan scale. Your open home is preserved.';
+    event('intake', 'Check listing', 'running', url);
+    const known =
+      propertyKey(url) === propertyKey(demoUrl) ? (curatedSources as SceneSpec['sources']) : [];
+    state.intake = await inspectListing(url, known, (detail) =>
+      event('intake', 'Read evidence', 'running', detail, modelName),
+    );
+    const dir = projectDirectory(state.intake.id);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'intake.json'), JSON.stringify(state.intake, null, 2));
+    state.lastAction = state.intake.summary;
+    event(
+      'intake',
+      'Input sufficiency',
+      state.intake.status === 'ready' ? 'done' : 'failed',
+      state.intake.summary,
+      modelName,
+    );
+  };
+});
+mutation('/api/workspaces/select', async (body) => {
+  const id = String(body.id || '');
+  const saved = await loadWorkspace(id);
+  verifyScene(saved.scene);
+  await save();
+  state.workspaceId = id;
+  state.scene = saved.scene;
+  state.modelUrl = saved.modelUrl;
+  state.workflow = saved.workflow || emptyWorkflow();
+  state.events = saved.events || [];
+  state.visualReview = saved.visualReview;
+  state.visualIssues = saved.visualIssues;
+  state.visualReviewRevision = saved.visualReviewRevision;
+  state.intake = saved.intake;
+  history.splice(0, history.length, ...(saved.history || []));
+  state.verification = verifyScene(state.scene);
+  state.lastAction =
+    'Opened saved home. Its source files, generated assets, and review history are preserved.';
+});
+backgroundJob('/api/refresh-sources', () => {
+  if (!state.workflow?.approvalMode)
+    throw new Error('Approve the plan and item selection before rebuilding its room details.');
+  return refreshSources;
+});
+backgroundJob('/api/review-rooms', () => {
+  if (!state.workflow?.approvalMode)
+    throw new Error('Approve the plan and item selection before the final room comparison.');
+  return reviewAllRooms;
+});
+backgroundJob('/api/repair-room-appearance', () => {
+  const reviews = state.workflow?.roomReviews;
+  if (
+    !reviews?.length ||
+    reviews.some((r) => r.revision !== state.scene.revision) ||
+    !state.modelUrl
+  )
+    throw new Error('Compare the current rooms before refining finishes.');
+  if ((state.workflow?.roomRepairIterations || 0) >= 2)
+    throw new Error('Two room finish attempts have run. Remaining differences need human review.');
+  return async () => {
+    const before = structuredClone(state.scene),
+      flow = state.workflow!;
+    flow.roomRepairIterations = (flow.roomRepairIterations || 0) + 1;
+    const renders = await roomRenderPathsForModel(state.modelUrl!);
+    const candidate = await refineRoomFinishes(before, reviews, renders, (label, detail) =>
+      event('room-repair', label, 'done', detail, modelName),
+    );
+    if (JSON.stringify(candidate.rooms) === JSON.stringify(before.rooms)) {
+      state.lastAction = 'No supported finish correction was found. Existing home retained.';
+      return;
+    }
+    candidate.revision = before.revision + 1;
+    const url = await renderScene(candidate);
+    const nextReviews = await evaluateRooms(
+      candidate,
+      await roomRenderPathsForModel(url),
+      (label, detail, failed) =>
+        event('room-review', label, failed ? 'failed' : 'done', detail, modelName),
+    );
+    const total = (rs: typeof reviews) => rs.reduce((sum, r) => sum + r.scores.materials, 0);
+    const regressed = reviews.some(
+      (r) =>
+        r.status === 'ready-for-human-review' &&
+        nextReviews.find((n) => n.roomId === r.roomId)?.status !== 'ready-for-human-review',
+    );
+    if (regressed || total(nextReviews) <= total(reviews)) {
+      state.lastAction =
+        'Fresh room comparisons did not show a safe improvement. Previous home and review retained.';
+      return;
+    }
+    checkpoint();
+    state.scene = candidate;
+    state.modelUrl = url;
+    flow.roomReviews = nextReviews;
+    state.verification = verifyScene(candidate);
+    recordVisualReview(aggregateRoomReviews(candidate, nextReviews, state.verification));
+    state.lastAction = 'Room finishes improved against source photos. ' + flow.review!.summary;
+  };
+});
 backgroundJob('/api/build', (body) => {
-  const url = validateListing(String(body.url || ''));
+  const url = String(body.url || '');
+  if (state.intake?.id !== propertyKey(url) || state.intake.status !== 'ready')
+    throw new Error('Check this listing and resolve missing source information before building.');
   return () => build(url);
 });
 backgroundJob('/api/approve', (body) => {
@@ -927,10 +1258,11 @@ mutation('/api/add', (body) => {
   const next = structuredClone(state.scene);
   const object = structuredClone(template);
   const floorZ = requestedFloor(body.floorZ);
-  if (floorZ > 0) {
+  if (floorZ > 0 || next.id !== initial.id) {
     const room =
-      next.rooms.find((room) => room.floorZ === floorZ && /bedroom/i.test(room.name)) ||
-      next.rooms.find((room) => room.floorZ === floorZ)!;
+      next.rooms.find(
+        (room) => room.floorZ === floorZ && /living|bedroom|lounge/i.test(room.name),
+      ) || next.rooms.find((room) => room.floorZ === floorZ)!;
     const xs = room.polygon.map((p) => p[0]),
       ys = room.polygon.map((p) => p[1]);
     object.position = [
@@ -947,22 +1279,30 @@ backgroundJob('/api/rebuild', () => {
   if (!state.workflow?.approvalMode)
     throw new Error('Approve your item selection before generating the scene.');
   return async () => {
+    const next = await addSourceFixtures(structuredClone(state.scene));
+    if (JSON.stringify(next) !== JSON.stringify(state.scene)) {
+      if (!verifyScene(next).passed)
+        throw new Error('Updated room details need a geometry correction before building.');
+      checkpoint();
+      commit(next, 'Source-based room details and viewing angles updated.');
+    }
     event(
       'blender',
-      'Build both floors',
+      'Rebuild this home',
       'running',
-      'Rebuilding the current approved arrangement with the source-traced upper floor.',
+      'Rebuilding the current approved arrangement and every room view.',
     );
     state.modelUrl = await buildBlender(state.scene);
     state.verification = verifyScene(state.scene);
     state.workflow!.phase = 'needs-review';
-    state.lastAction = 'Both floors rebuilt. The new geometry needs a fresh visual review.';
+    state.lastAction = 'Home rebuilt. Comparing every room with its source photos.';
     event(
       'blender',
       'Build both floors',
       'done',
       'Fresh Blender model and render published; current furniture preserved.',
     );
+    await reviewAllRooms();
   };
 });
 mutation('/api/remove', (body) => {
@@ -983,8 +1323,7 @@ mutation('/api/visual-review', async (body) => {
     );
   if (typeof body.image !== 'string' || !body.image.startsWith('data:image/'))
     throw new Error('A rendered scene capture is required.');
-  const answer = await inspectScene(state.scene, body.image);
-  recordVisualReview(answer);
+  const answer = recordVisualReview(await inspectScene(state.scene, body.image));
   event('visual', 'Argon visual inspection', 'done', state.visualReview!);
   state.lastAction =
     answer.status === 'ready-for-human-review'
@@ -997,7 +1336,11 @@ if (process.env.NODE_ENV === 'production') {
   app.get('/{*path}', (_req, res) => res.sendFile(path.resolve('dist/index.html')));
 } else {
   const vite = await createViteServer({
-    server: { middlewareMode: true, hmr: { port: Number(process.env.PORT || 5173) + 1 } },
+    server: {
+      middlewareMode: true,
+      hmr: { port: Number(process.env.PORT || 5173) + 1 },
+      watch: { ignored: ['**/work/**', '**/runtime/**', '**/public/generated/**'] },
+    },
     appType: 'spa',
   });
   app.use(vite.middlewares);
