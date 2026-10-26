@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fixture from '../shared/brannan.json';
 import type { SceneSpec } from '../shared/types.js';
-import { normalizeRoomReview, aggregateRoomReviews, eachLimit } from '../server/rooms.js';
+import {
+  normalizeRoomReview,
+  aggregateRoomReviews,
+  eachLimit,
+  roomAppearanceSchema,
+} from '../server/rooms.js';
 import { verifyScene } from '../shared/verification.js';
 const passing = {
   scores: { layout: 95, objects: 95, materials: 95 },
@@ -11,6 +16,90 @@ const passing = {
   majorMismatch: false,
   recommendations: [],
 };
+test('room appearance retains large detail lists, late feature tokens and long descriptions', () => {
+  const longNote =
+    'The bay window has a built-in bench with a dark blue cushion; the material color is an approximation from the supplied photograph. '.repeat(
+      4,
+    );
+  const details = [
+    ...Array.from({ length: 40 }, (_, i) => `Source-backed finish observation ${i + 1}`),
+    'feature:closet-rail',
+    'feature:concrete-accent-wall',
+    longNote,
+  ];
+  const raw = {
+    wallColor: '#e9e6dc',
+    floorColor: '#93623d',
+    floorMaterial: 'wood',
+    ceilingColor: '#ffffff',
+    details,
+  };
+  const parsed = roomAppearanceSchema.parse(raw);
+  assert.ok(longNote.length > 250);
+  assert.deepEqual(parsed, raw, 'Descriptive evidence must not be truncated or silently dropped.');
+  assert.equal(parsed.details[40], 'feature:closet-rail');
+  assert.equal(parsed.details[41], 'feature:concrete-accent-wall');
+});
+
+test('unbounded descriptive lists still reject malformed values and invalid appearance fields', () => {
+  const valid = {
+    wallColor: '#e9e6dc',
+    floorColor: '#93623d',
+    floorMaterial: 'wood',
+    ceilingColor: '#ffffff',
+    details: ['Visible wood flooring'],
+  };
+  for (const invalid of [
+    { ...valid, details: ['Visible wood flooring', 42] },
+    { ...valid, details: ['Visible wood flooring', { note: 'not a string' }] },
+    { ...valid, details: 'not an array' },
+    { ...valid, wallColor: 'white' },
+    { ...valid, floorColor: '#12345g' },
+    { ...valid, floorMaterial: 'invented-material' },
+  ]) {
+    assert.equal(roomAppearanceSchema.safeParse(invalid).success, false);
+  }
+});
+
+test('large critic recommendation lists are retained without bypassing evidence or mismatch failures', () => {
+  const s = structuredClone(fixture) as SceneSpec;
+  const roomId = s.rooms[0].id;
+  s.sources.push({
+    id: 'matched-many-recommendations',
+    kind: 'photo',
+    label: 'living',
+    url: 'https://example.invalid/photo.jpg',
+    localUrl: '/evidence/test.jpg',
+    roomIds: [roomId],
+  });
+  const recommendations = Array.from(
+    { length: 40 },
+    (_, i) => `Compare visible finish detail ${i + 1} against the source photograph.`,
+  );
+  for (const [overrides, expected] of [
+    [{}, 'ready-for-human-review'],
+    [{ evidenceSufficient: false }, 'insufficient-evidence'],
+    [{ majorMismatch: true }, 'needs-repair'],
+  ] as const) {
+    const review = normalizeRoomReview(
+      { ...passing, recommendations, ...overrides },
+      s,
+      roomId,
+      '/generated/test.png',
+    );
+    assert.deepEqual(review.recommendations, recommendations);
+    assert.equal(review.status, expected);
+  }
+  assert.throws(() =>
+    normalizeRoomReview(
+      { ...passing, recommendations: [...recommendations, 42] },
+      s,
+      roomId,
+      '/generated/test.png',
+    ),
+  );
+});
+
 test('high visual scores cannot pass a room without matching source photographs', () => {
   const s = structuredClone(fixture) as SceneSpec;
   assert.equal(

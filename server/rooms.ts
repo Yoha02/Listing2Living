@@ -11,12 +11,14 @@ import type {
 
 type Progress = (label: string, detail: string, failed?: boolean) => void;
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
-const appearanceSchema = z.object({
+export const roomAppearanceSchema = z.object({
   wallColor: color,
   floorColor: color,
   floorMaterial: z.enum(['wood', 'tile', 'carpet', 'concrete']),
   ceilingColor: color,
-  details: z.array(z.string().max(250)).max(8),
+  // Descriptive evidence is already bounded by the model response token budget.
+  // Preserve all observations, including feature tokens late in the response.
+  details: z.array(z.string()),
 });
 const scoreSchema = z.object({
   layout: z.number().min(0).max(100),
@@ -28,7 +30,7 @@ const roomReviewSchema = z.object({
   summary: z.string(),
   evidenceSufficient: z.boolean(),
   majorMismatch: z.boolean(),
-  recommendations: z.array(z.string()).max(8),
+  recommendations: z.array(z.string()),
 });
 const local = (s: Source) => path.join('public', s.localUrl!);
 export async function eachLimit<T, R>(
@@ -138,7 +140,7 @@ export async function enrichRoomSources(scene: SceneSpec, progress: Progress): P
       photos.slice(0, 3).map(local),
       1800,
     );
-    room.appearance = { ...appearanceSchema.parse(result.value), basis: 'photo' };
+    room.appearance = { ...roomAppearanceSchema.parse(result.value), basis: 'photo' };
     if (previous?.details.includes('No matching interior photo; finish is inferred.'))
       room.appearance.details = room.appearance.details.filter((d) => !d.includes('No matching'));
     progress(
@@ -316,7 +318,7 @@ export async function refineRoomFinishes(
         [render, ...photos.slice(0, 2).map(local)],
         1800,
       );
-      const corrected = appearanceSchema.parse(result.value);
+      const corrected = roomAppearanceSchema.parse(result.value);
       room.appearance = { ...corrected, details: room.appearance.details, basis: 'photo' };
       progress(
         room.name,
