@@ -1,0 +1,292 @@
+{
+  "objects": [
+    {
+      "id": "bath-tub",
+      "name": "Main bathroom bathtub",
+      "kind": "appliance",
+      "position": [
+        3.16,
+        -0.02,
+        0.275
+      ],
+      "dimensions": [
+        1.34,
+        0.7,
+        0.55
+      ],
+      "rotation": 0,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-bath-tub",
+      "name": "Second-floor bathtub",
+      "kind": "appliance",
+      "position": [
+        3.115,
+        0.65,
+        3.125
+      ],
+      "dimensions": [
+        1.5,
+        0.64,
+        0.55
+      ],
+      "rotation": 0,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-bath-vanity",
+      "name": "Second-floor bathroom vanity",
+      "kind": "cabinet",
+      "position": [
+        4.32,
+        2.25,
+        3.3
+      ],
+      "dimensions": [
+        0.5,
+        0.75,
+        0.9
+      ],
+      "rotation": 0,
+      "color": "#603e2e",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-laundry-stack",
+      "name": "Stacked washer dryer",
+      "kind": "appliance",
+      "position": [
+        5.25,
+        2.08,
+        3.775
+      ],
+      "dimensions": [
+        0.7,
+        0.75,
+        1.85
+      ],
+      "rotation": 3.141592653589793,
+      "color": "#ddddda",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-west-shoe-shelf",
+      "name": "Low oak shoe shelf",
+      "kind": "cabinet",
+      "position": [
+        2.35,
+        -1.74,
+        3.225
+      ],
+      "dimensions": [
+        3.4,
+        0.38,
+        0.75
+      ],
+      "rotation": 0,
+      "color": "#ba9465",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "bath-toilet",
+      "name": "Main bathroom toilet",
+      "kind": "appliance",
+      "position": [
+        4.17,
+        1.1,
+        0.39
+      ],
+      "dimensions": [
+        0.5,
+        0.65,
+        0.78
+      ],
+      "rotation": -1.5707963267948966,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-bath-toilet",
+      "name": "Second-floor bathroom toilet",
+      "kind": "appliance",
+      "position": [
+        4.22,
+        1.46,
+        3.24
+      ],
+      "dimensions": [
+        0.5,
+        0.62,
+        0.78
+      ],
+      "rotation": -1.5707963267948966,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "bath-shower-surround",
+      "name": "Main bathroom shower surround",
+      "kind": "appliance",
+      "position": [
+        3.16,
+        -0.02,
+        1.4
+      ],
+      "dimensions": [
+        1.34,
+        0.7,
+        1.65
+      ],
+      "rotation": 0,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-bath-shower-surround",
+      "name": "Second-floor shower surround",
+      "kind": "appliance",
+      "position": [
+        3.115,
+        0.65,
+        4.25
+      ],
+      "dimensions": [
+        1.5,
+        0.64,
+        1.65
+      ],
+      "rotation": 0,
+      "color": "#ecece6",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "bath-mirror",
+      "name": "Main bathroom mirror",
+      "kind": "appliance",
+      "position": [
+        4.49,
+        1.95,
+        1.6
+      ],
+      "dimensions": [
+        0.02,
+        0.65,
+        0.8
+      ],
+      "rotation": 0,
+      "color": "#dce2df",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "upper-bath-mirror",
+      "name": "Second-floor bathroom mirror",
+      "kind": "appliance",
+      "position": [
+        4.565,
+        2.25,
+        4.45
+      ],
+      "dimensions": [
+        0.02,
+        0.7,
+        0.8
+      ],
+      "rotation": 0,
+      "color": "#dce2df",
+      "movable": false,
+      "basis": "inferred"
+    }
+  ],
+  "navigationUpdates": [
+    {
+      "floorZ": 2.85,
+      "targetId": "upper-laundry",
+      "point": [
+        5.25,
+        3.2
+      ],
+      "label": "Laundry approach"
+    }
+  ],
+  "notes": [
+    "Listing gallery photos 06 and 16 show bathroom fixtures; photo17 shows a stacked washer/dryer; photos13\u00e2\u20ac\u201c15 show low wood shoe shelving and hanging rails. Fixture types are photo-supported; exact dimensions, positions and orientation here are inferred to fit the traced plan.",
+    "The lower bathtub is estimated at1.34m long to fit the traced recess. This differs from standard tub sizes and is an unresolved scale limitation, not a measured product specification.",
+    "The laundry route ends outside its doorway, since the washer/dryer occupies the room's previous target. These fixtures are canonical fixed objects and participate in layout checks.",
+    "Toilets, white shower surrounds, and vanity mirrors are supported by bathroom photos. Their canonical dimensions and placements are inferred; shower surrounds start above the tubs with a small separation to avoid overlapping collision boxes. Room inspection cameras are approximate doorway views, including the laundry captured from the adjacent hall."
+  ],
+  "cameras": [
+    {
+      "id": "room-upper-laundry",
+      "label": "Laundry from doorway",
+      "position": [
+        5.25,
+        3.9,
+        4.4
+      ],
+      "target": [
+        5.25,
+        2.08,
+        3.78
+      ],
+      "floorZ": 2.85
+    },
+    {
+      "id": "room-bathroom",
+      "label": "Main bathroom from doorway",
+      "position": [
+        2.65,
+        1.7,
+        1.55
+      ],
+      "target": [
+        4.05,
+        0.8,
+        0.9
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "room-upper-bathroom",
+      "label": "Second-floor bathroom from doorway",
+      "position": [
+        2.62,
+        2.3,
+        4.4
+      ],
+      "target": [
+        3.8,
+        1.3,
+        3.75
+      ],
+      "floorZ": 2.85
+    },
+    {
+      "id": "room-upper-hall",
+      "label": "Hall toward staircase",
+      "position": [
+        3.84,
+        3.7,
+        4.4
+      ],
+      "target": [
+        3.84,
+        6.8,
+        3.0
+      ],
+      "floorZ": 2.85
+    }
+  ]
+}

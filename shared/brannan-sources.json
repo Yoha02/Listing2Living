@@ -1,0 +1,239 @@
+[
+  {
+    "id": "listing",
+    "label": "Zillow listing \u00b7 200 Brannan Apt 114",
+    "url": "https://www.zillow.com/homedetails/200-Brannan-St-APT-114-San-Francisco-CA-94107/69817820_zpid/",
+    "kind": "listing"
+  },
+  {
+    "id": "floor-plan",
+    "label": "Listing floor plan \u00b7 labelled Matterport-derived",
+    "url": "https://photos.zillowstatic.com/fp/21958f3c18cd9d4bf09f57b38b339f90-uncropped_scaled_within_1536_1152.png",
+    "kind": "plan"
+  },
+  {
+    "id": "photo1",
+    "url": "https://photos.zillowstatic.com/fp/355829cef10ca10ee8f413e8f5986962-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-01.jpg",
+    "kind": "photo",
+    "label": "Living room toward kitchen and stairs",
+    "roomIds": ["living", "kitchen"],
+    "floorZ": 0
+  },
+  {
+    "id": "photo2",
+    "url": "https://photos.zillowstatic.com/fp/9bcefc890508441f8637117607c458bb-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-02.jpg",
+    "kind": "photo",
+    "label": "Living room window and stair",
+    "roomIds": ["living", "kitchen"],
+    "floorZ": 0
+  },
+  {
+    "id": "photo3",
+    "url": "https://photos.zillowstatic.com/fp/13ae4bac714000c040b06b155b619e49-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-03.jpg",
+    "kind": "photo",
+    "label": "Kitchen and entry circulation",
+    "roomIds": ["living", "kitchen", "foyer"],
+    "floorZ": 0
+  },
+  {
+    "id": "photo4",
+    "url": "https://photos.zillowstatic.com/fp/1365f4fc746c91559821f1bf60993076-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-04.jpg",
+    "kind": "photo",
+    "label": "Kitchen cabinets and worktop",
+    "roomIds": ["kitchen"],
+    "floorZ": 0
+  },
+  {
+    "id": "gallery-05",
+    "url": "https://photos.zillowstatic.com/fp/f472e89dbe857fc7fbda84a1ec11d3bc-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-05.jpg",
+    "kind": "photo",
+    "label": "Kitchen appliances",
+    "roomIds": ["kitchen"],
+    "floorZ": 0
+  },
+  {
+    "id": "gallery-06",
+    "url": "https://photos.zillowstatic.com/fp/06aa9192023ca8956b6c9ec20a173745-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-06.jpg",
+    "kind": "photo",
+    "label": "Ground-floor bathroom",
+    "roomIds": ["bathroom"],
+    "floorZ": 0
+  },
+  {
+    "id": "gallery-07",
+    "url": "https://photos.zillowstatic.com/fp/caf5800190902a3d6c4bdc9cac627b53-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-07.jpg",
+    "kind": "photo",
+    "label": "Upper hallway and stair landing",
+    "roomIds": ["upper-hall"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-08",
+    "url": "https://photos.zillowstatic.com/fp/bf2261703791eda05f43f3fef2e34f1b-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-08.jpg",
+    "kind": "photo",
+    "label": "West bedroom toward window",
+    "roomIds": ["upper-bedroom-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-09",
+    "url": "https://photos.zillowstatic.com/fp/4f14583a8154a4dc67b8976742f6d967-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-09.jpg",
+    "kind": "photo",
+    "label": "West bedroom concrete ceiling",
+    "roomIds": ["upper-bedroom-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-10",
+    "url": "https://photos.zillowstatic.com/fp/a69b4dface218e322b165f3ff8b1553b-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-10.jpg",
+    "kind": "photo",
+    "label": "West bedroom door and wall",
+    "roomIds": ["upper-bedroom-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-11",
+    "url": "https://photos.zillowstatic.com/fp/9548a2e752b37f522edebb385034e9d3-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-11.jpg",
+    "kind": "photo",
+    "label": "West bedroom and closet door",
+    "roomIds": ["upper-bedroom-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-12",
+    "url": "https://photos.zillowstatic.com/fp/2d461d900099d987cf18dd15cfa6384e-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-12.jpg",
+    "kind": "photo",
+    "label": "West bedroom closet entrance",
+    "roomIds": ["upper-bedroom-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-13",
+    "url": "https://photos.zillowstatic.com/fp/146dea1ba778da245f9a7dc3854b2569-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-13.jpg",
+    "kind": "photo",
+    "label": "West walk-in closet shelving",
+    "roomIds": ["upper-closet-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-14",
+    "url": "https://photos.zillowstatic.com/fp/ad782969fe9881c78641d3ccf018313b-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-14.jpg",
+    "kind": "photo",
+    "label": "West closet hanging rails",
+    "roomIds": ["upper-closet-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-15",
+    "url": "https://photos.zillowstatic.com/fp/f95bc820bc0724180a2cc02dc6c13757-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-15.jpg",
+    "kind": "photo",
+    "label": "West closet shoe storage",
+    "roomIds": ["upper-closet-west"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-16",
+    "url": "https://photos.zillowstatic.com/fp/3a5b619918df3142bd81dc76478d9ba9-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-16.jpg",
+    "kind": "photo",
+    "label": "Upper bathroom blue walls and tub",
+    "roomIds": ["upper-bathroom"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-17",
+    "url": "https://photos.zillowstatic.com/fp/b5905be849731213485f39d3ea233b1e-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-17.jpg",
+    "kind": "photo",
+    "label": "Laundry stacked washer and dryer",
+    "roomIds": ["upper-laundry"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-18",
+    "url": "https://photos.zillowstatic.com/fp/576d422057178ca77fba43f70e9f1c1a-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-18.jpg",
+    "kind": "photo",
+    "label": "East bedroom concrete accent wall",
+    "roomIds": ["upper-bedroom-east"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-19",
+    "url": "https://photos.zillowstatic.com/fp/f02365582dde5cdfffbfbcc14fe6d133-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-19.jpg",
+    "kind": "photo",
+    "label": "East bedroom mint walls and doors",
+    "roomIds": ["upper-bedroom-east"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-20",
+    "url": "https://photos.zillowstatic.com/fp/dca1fab5a31ce52956bc4b67c9fad888-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-20.jpg",
+    "kind": "photo",
+    "label": "East bedroom half wall and level change",
+    "roomIds": ["upper-bedroom-east"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-21",
+    "url": "https://photos.zillowstatic.com/fp/fc81ba3b1d4c7b7a2677ca53719469ef-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-21.jpg",
+    "kind": "photo",
+    "label": "East bedroom window and wood floor",
+    "roomIds": ["upper-bedroom-east"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "gallery-22",
+    "url": "https://photos.zillowstatic.com/fp/02dd49ec0d8d37b5286e1907e8c8f29a-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-22.jpg",
+    "kind": "photo",
+    "label": "East walk-in closet rail and concrete wall",
+    "roomIds": ["upper-closet-east"],
+    "floorZ": 2.85
+  },
+  {
+    "id": "plan-lower",
+    "url": "https://photos.zillowstatic.com/fp/4c9437040bb25f70c631d8012e7d3031-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-34.jpg",
+    "kind": "plan",
+    "label": "Main-floor source plan",
+    "floorZ": 0,
+    "roomIds": ["living", "kitchen", "foyer", "bathroom", "closet"]
+  },
+  {
+    "id": "plan-upper",
+    "url": "https://photos.zillowstatic.com/fp/cfe9c779d4697d5f61651657aaf8d8b6-cc_ft_1536.jpg",
+    "localUrl": "/evidence/zillow-69817820/gallery-35.jpg",
+    "kind": "plan",
+    "label": "Second-floor source plan",
+    "floorZ": 2.85,
+    "roomIds": [
+      "upper-bedroom-west",
+      "upper-bedroom-east",
+      "upper-hall",
+      "upper-bathroom",
+      "upper-laundry",
+      "upper-linen",
+      "upper-closet-east",
+      "upper-closet-west"
+    ]
+  }
+]

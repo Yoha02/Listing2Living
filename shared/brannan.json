@@ -1,0 +1,1565 @@
+{
+  "id": "brannan-lower-floor",
+  "revision": 1,
+  "title": "200 Brannan \u00b7 Loft 114",
+  "listingUrl": "https://www.zillow.com/homedetails/200-Brannan-St-APT-114-San-Francisco-CA-94107/69817820_zpid/",
+  "units": "m",
+  "rooms": [
+    {
+      "id": "living",
+      "name": "Living room",
+      "polygon": [
+        [
+          0,
+          5.16
+        ],
+        [
+          4.24,
+          5.16
+        ],
+        [
+          4.24,
+          8.49
+        ],
+        [
+          0,
+          8.49
+        ]
+      ],
+      "floorZ": 0,
+      "ceilingHeight": 2.85
+    },
+    {
+      "id": "kitchen",
+      "name": "Kitchen",
+      "polygon": [
+        [
+          1.33,
+          2.37
+        ],
+        [
+          4.24,
+          2.37
+        ],
+        [
+          4.24,
+          5.16
+        ],
+        [
+          1.33,
+          5.16
+        ]
+      ],
+      "floorZ": 0,
+      "ceilingHeight": 2.85
+    },
+    {
+      "id": "foyer",
+      "name": "Entry & circulation",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          1.61,
+          0
+        ],
+        [
+          1.61,
+          1.02
+        ],
+        [
+          2.4,
+          1.02
+        ],
+        [
+          2.4,
+          2.37
+        ],
+        [
+          1.33,
+          2.37
+        ],
+        [
+          1.33,
+          5.16
+        ],
+        [
+          0,
+          5.16
+        ]
+      ],
+      "floorZ": 0,
+      "ceilingHeight": 2.85
+    },
+    {
+      "id": "bathroom",
+      "name": "Bathroom",
+      "polygon": [
+        [
+          2.4,
+          -0.47
+        ],
+        [
+          3.92,
+          -0.47
+        ],
+        [
+          3.92,
+          0.35
+        ],
+        [
+          4.59,
+          0.35
+        ],
+        [
+          4.59,
+          2.37
+        ],
+        [
+          2.4,
+          2.37
+        ]
+      ],
+      "floorZ": 0,
+      "ceilingHeight": 2.85
+    },
+    {
+      "id": "closet",
+      "name": "Entry closet",
+      "polygon": [
+        [
+          1.61,
+          0
+        ],
+        [
+          2.4,
+          0
+        ],
+        [
+          2.4,
+          1.02
+        ],
+        [
+          1.61,
+          1.02
+        ]
+      ],
+      "floorZ": 0,
+      "ceilingHeight": 2.85
+    },
+    {
+      "id": "upper-bedroom-west",
+      "name": "West bedroom",
+      "polygon": [
+        [
+          0.1,
+          0.75
+        ],
+        [
+          2.3,
+          0.75
+        ],
+        [
+          2.3,
+          4.1
+        ],
+        [
+          3.3,
+          4.1
+        ],
+        [
+          3.3,
+          7.92
+        ],
+        [
+          3.6,
+          7.92
+        ],
+        [
+          3.6,
+          8.61
+        ],
+        [
+          0.1,
+          8.61
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-bedroom-east",
+      "name": "East bedroom",
+      "polygon": [
+        [
+          5.87,
+          2.27
+        ],
+        [
+          9,
+          2.27
+        ],
+        [
+          9,
+          8.76
+        ],
+        [
+          5.9,
+          8.76
+        ],
+        [
+          5.9,
+          7.92
+        ],
+        [
+          4.84,
+          7.92
+        ],
+        [
+          4.84,
+          4.1
+        ],
+        [
+          5.87,
+          4.1
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-hall",
+      "name": "Upper hallway & landing",
+      "polygon": [
+        [
+          2.3,
+          2.77
+        ],
+        [
+          5.87,
+          2.77
+        ],
+        [
+          5.87,
+          4.1
+        ],
+        [
+          4.38,
+          4.1
+        ],
+        [
+          4.38,
+          5.3
+        ],
+        [
+          3.3,
+          5.3
+        ],
+        [
+          3.3,
+          4.1
+        ],
+        [
+          2.3,
+          4.1
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-bathroom",
+      "name": "Upper bathroom",
+      "polygon": [
+        [
+          2.3,
+          0.25
+        ],
+        [
+          3.95,
+          0.25
+        ],
+        [
+          3.95,
+          0.95
+        ],
+        [
+          4.65,
+          0.95
+        ],
+        [
+          4.65,
+          2.77
+        ],
+        [
+          2.3,
+          2.77
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-laundry",
+      "name": "Laundry",
+      "polygon": [
+        [
+          4.65,
+          1.6
+        ],
+        [
+          5.87,
+          1.6
+        ],
+        [
+          5.87,
+          2.77
+        ],
+        [
+          4.65,
+          2.77
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-linen",
+      "name": "Linen closet",
+      "polygon": [
+        [
+          4.65,
+          0.1
+        ],
+        [
+          5.87,
+          0.1
+        ],
+        [
+          5.87,
+          1.6
+        ],
+        [
+          4.65,
+          1.6
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-closet-east",
+      "name": "East walk-in closet",
+      "polygon": [
+        [
+          5.87,
+          0.1
+        ],
+        [
+          9,
+          0.1
+        ],
+        [
+          9,
+          2.27
+        ],
+        [
+          5.87,
+          2.27
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    },
+    {
+      "id": "upper-closet-west",
+      "name": "West walk-in closet",
+      "polygon": [
+        [
+          0.1,
+          -2.1
+        ],
+        [
+          4.61,
+          -2.1
+        ],
+        [
+          4.61,
+          -0.05
+        ],
+        [
+          2.3,
+          -0.05
+        ],
+        [
+          2.3,
+          0.75
+        ],
+        [
+          0.1,
+          0.75
+        ]
+      ],
+      "floorZ": 2.85,
+      "ceilingHeight": 2.65
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall-west",
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        0,
+        8.49
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e7e5df",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-north",
+      "start": [
+        0,
+        8.49
+      ],
+      "end": [
+        4.24,
+        8.49
+      ],
+      "height": 2.85,
+      "thickness": 0.18,
+      "color": "#e9e8e2",
+      "openings": [
+        {
+          "id": "living-window",
+          "type": "window",
+          "offset": 2.23,
+          "width": 2.42,
+          "height": 2.05,
+          "bottom": 0.5,
+          "basis": "plan"
+        }
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-east",
+      "start": [
+        4.24,
+        2.37
+      ],
+      "end": [
+        4.24,
+        8.49
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e7e5df",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-entry",
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        2.4,
+        0
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "front-door",
+          "type": "door",
+          "offset": 0.62,
+          "width": 0.9,
+          "height": 2.12,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-kitchen-back",
+      "start": [
+        1.33,
+        2.37
+      ],
+      "end": [
+        4.59,
+        2.37
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e7e5df",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-bath-west",
+      "start": [
+        2.4,
+        -0.47
+      ],
+      "end": [
+        2.4,
+        2.37
+      ],
+      "height": 2.85,
+      "thickness": 0.12,
+      "color": "#e5e8e4",
+      "openings": [
+        {
+          "id": "bath-door",
+          "type": "door",
+          "offset": 2.02,
+          "width": 0.8,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-bath-east",
+      "start": [
+        4.59,
+        0.35
+      ],
+      "end": [
+        4.59,
+        2.37
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e5e8e4",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-bath-bottom",
+      "start": [
+        2.4,
+        -0.47
+      ],
+      "end": [
+        3.92,
+        -0.47
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e5e8e4",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-bath-notch-x",
+      "start": [
+        3.92,
+        -0.47
+      ],
+      "end": [
+        3.92,
+        0.35
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e5e8e4",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-bath-notch-y",
+      "start": [
+        3.92,
+        0.35
+      ],
+      "end": [
+        4.59,
+        0.35
+      ],
+      "height": 2.85,
+      "thickness": 0.14,
+      "color": "#e5e8e4",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-closet-top",
+      "start": [
+        1.61,
+        1.02
+      ],
+      "end": [
+        2.4,
+        1.02
+      ],
+      "height": 2.85,
+      "thickness": 0.1,
+      "color": "#e7e5df",
+      "openings": [],
+      "floorZ": 0
+    },
+    {
+      "id": "wall-closet-west",
+      "start": [
+        1.61,
+        0
+      ],
+      "end": [
+        1.61,
+        1.02
+      ],
+      "height": 2.85,
+      "thickness": 0.1,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "closet-door",
+          "type": "door",
+          "offset": 0.51,
+          "width": 0.72,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "upper-wall-west",
+      "start": [
+        0.1,
+        -2.1
+      ],
+      "end": [
+        0.1,
+        8.61
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-north",
+      "start": [
+        0.1,
+        8.61
+      ],
+      "end": [
+        3.6,
+        8.61
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-west-window",
+          "type": "window",
+          "offset": 2.0,
+          "width": 1.75,
+          "height": 1.55,
+          "bottom": 0.8,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-west-north-step",
+      "start": [
+        3.6,
+        7.92
+      ],
+      "end": [
+        3.6,
+        8.61
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-north-connector",
+      "start": [
+        3.6,
+        7.92
+      ],
+      "end": [
+        5.9,
+        7.92
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-north-step",
+      "start": [
+        5.9,
+        7.92
+      ],
+      "end": [
+        5.9,
+        8.76
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-north",
+      "start": [
+        5.9,
+        8.76
+      ],
+      "end": [
+        9,
+        8.76
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-east-window",
+          "type": "window",
+          "offset": 1.65,
+          "width": 1.3,
+          "height": 1.55,
+          "bottom": 0.8,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-east",
+      "start": [
+        9,
+        0.1
+      ],
+      "end": [
+        9,
+        8.76
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-south",
+      "start": [
+        4.65,
+        0.1
+      ],
+      "end": [
+        9,
+        0.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-south",
+      "start": [
+        0.1,
+        -2.1
+      ],
+      "end": [
+        4.61,
+        -2.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-closet-east",
+      "start": [
+        4.61,
+        -2.1
+      ],
+      "end": [
+        4.61,
+        -0.05
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-closet-notch",
+      "start": [
+        2.3,
+        -0.05
+      ],
+      "end": [
+        4.61,
+        -0.05
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.16,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-bath-south",
+      "start": [
+        2.3,
+        0.25
+      ],
+      "end": [
+        3.95,
+        0.25
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.14,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-bath-notch-x",
+      "start": [
+        3.95,
+        0.25
+      ],
+      "end": [
+        3.95,
+        0.95
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-bath-notch-y",
+      "start": [
+        3.95,
+        0.95
+      ],
+      "end": [
+        4.65,
+        0.95
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-bedroom-hall",
+      "start": [
+        2.3,
+        0.25
+      ],
+      "end": [
+        2.3,
+        4.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-west-bedroom-door",
+          "type": "door",
+          "offset": 3.1,
+          "width": 0.9,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-west-bedroom-stair",
+      "start": [
+        3.3,
+        4.1
+      ],
+      "end": [
+        3.3,
+        7.92
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-west-bedroom-hall-north",
+      "start": [
+        2.3,
+        4.1
+      ],
+      "end": [
+        3.3,
+        4.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-bedroom-stair",
+      "start": [
+        4.61,
+        4.1
+      ],
+      "end": [
+        4.61,
+        7.92
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.46,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-bedroom-hall-north",
+      "start": [
+        4.38,
+        4.1
+      ],
+      "end": [
+        5.87,
+        4.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-east-bedroom-hall",
+      "start": [
+        5.87,
+        2.27
+      ],
+      "end": [
+        5.87,
+        4.1
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-east-bedroom-door",
+          "type": "door",
+          "offset": 1.08,
+          "width": 0.9,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-bath-hall",
+      "start": [
+        2.3,
+        2.77
+      ],
+      "end": [
+        4.65,
+        2.77
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-bath-door",
+          "type": "door",
+          "offset": 0.75,
+          "width": 0.86,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-laundry-hall",
+      "start": [
+        4.65,
+        2.77
+      ],
+      "end": [
+        5.87,
+        2.77
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-laundry-door",
+          "type": "door",
+          "offset": 0.6,
+          "width": 0.8,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-bath-east",
+      "start": [
+        4.65,
+        0.95
+      ],
+      "end": [
+        4.65,
+        2.77
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-laundry-linen",
+      "start": [
+        4.65,
+        1.6
+      ],
+      "end": [
+        5.87,
+        1.6
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-linen-west",
+      "start": [
+        4.65,
+        0.1
+      ],
+      "end": [
+        4.65,
+        0.95
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": []
+    },
+    {
+      "id": "upper-wall-linen-east",
+      "start": [
+        5.87,
+        0.1
+      ],
+      "end": [
+        5.87,
+        2.27
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-linen-door",
+          "type": "door",
+          "offset": 0.75,
+          "width": 0.8,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-east-closet-bedroom",
+      "start": [
+        5.87,
+        2.27
+      ],
+      "end": [
+        9,
+        2.27
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-east-closet-door",
+          "type": "door",
+          "offset": 1.53,
+          "width": 0.9,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    },
+    {
+      "id": "upper-wall-west-closet-bedroom",
+      "start": [
+        0.1,
+        0.75
+      ],
+      "end": [
+        2.3,
+        0.75
+      ],
+      "floorZ": 2.85,
+      "height": 2.65,
+      "thickness": 0.12,
+      "color": "#e7e5df",
+      "openings": [
+        {
+          "id": "upper-west-closet-door",
+          "type": "door",
+          "offset": 1.55,
+          "width": 0.9,
+          "height": 2.08,
+          "bottom": 0,
+          "basis": "plan"
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "kitchen-counter-south",
+      "name": "Sink counter",
+      "kind": "counter",
+      "position": [
+        2.79,
+        2.77,
+        0.46
+      ],
+      "dimensions": [
+        2.76,
+        0.65,
+        0.92
+      ],
+      "rotation": 0,
+      "color": "#542b20",
+      "movable": false,
+      "basis": "plan"
+    },
+    {
+      "id": "kitchen-counter-east",
+      "name": "Cooking counter",
+      "kind": "counter",
+      "position": [
+        3.84,
+        3.6675,
+        0.46
+      ],
+      "dimensions": [
+        0.65,
+        1.125,
+        0.92
+      ],
+      "rotation": 0,
+      "color": "#542b20",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "kitchen-fridge",
+      "name": "Refrigerator",
+      "kind": "appliance",
+      "position": [
+        3.84,
+        4.67,
+        1.02
+      ],
+      "dimensions": [
+        0.65,
+        0.86,
+        2.04
+      ],
+      "rotation": 0,
+      "color": "#8d9394",
+      "movable": false,
+      "basis": "inferred"
+    },
+    {
+      "id": "bath-vanity",
+      "name": "Bathroom vanity",
+      "kind": "cabinet",
+      "position": [
+        4.23,
+        1.95,
+        0.44
+      ],
+      "dimensions": [
+        0.56,
+        0.65,
+        0.88
+      ],
+      "rotation": 0,
+      "color": "#b6a58c",
+      "movable": false,
+      "basis": "plan"
+    }
+  ],
+  "stairs": [
+    {
+      "id": "main-stair",
+      "position": [
+        3.84,
+        6.54,
+        1.425
+      ],
+      "dimensions": [
+        0.8,
+        2.48,
+        2.85
+      ],
+      "rotation": 0,
+      "steps": 14,
+      "bottom": [
+        3.84,
+        7.78
+      ],
+      "top": [
+        3.84,
+        5.3
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": "overview",
+      "label": "Dollhouse",
+      "position": [
+        9,
+        -7,
+        11
+      ],
+      "target": [
+        2.1,
+        4.1,
+        0.65
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "entry",
+      "label": "From the entrance",
+      "position": [
+        0.78,
+        0.72,
+        1.62
+      ],
+      "target": [
+        2.05,
+        6.8,
+        1.25
+      ],
+      "floorZ": 0
+    },
+    {
+      "id": "living",
+      "label": "Living & kitchen",
+      "position": [
+        0.55,
+        7.95,
+        1.62
+      ],
+      "target": [
+        3.25,
+        3.65,
+        1.15
+      ],
+      "sourceRef": "photo-1",
+      "floorZ": 0
+    },
+    {
+      "id": "window",
+      "label": "Toward the window",
+      "position": [
+        1.4,
+        3.85,
+        1.62
+      ],
+      "target": [
+        2.2,
+        8.49,
+        1.3
+      ],
+      "sourceRef": "photo-2",
+      "floorZ": 0
+    },
+    {
+      "id": "upper-overview",
+      "label": "Upper floor overview",
+      "position": [
+        10,
+        -4,
+        11
+      ],
+      "target": [
+        4.55,
+        3.2,
+        3.1
+      ],
+      "floorZ": 2.85
+    },
+    {
+      "id": "upper-landing",
+      "label": "Upper landing",
+      "position": [
+        3.84,
+        4.75,
+        4.47
+      ],
+      "target": [
+        3.84,
+        2.8,
+        4.1
+      ],
+      "floorZ": 2.85
+    },
+    {
+      "id": "upper-west-bedroom",
+      "label": "West bedroom",
+      "position": [
+        1.15,
+        2.4,
+        4.47
+      ],
+      "target": [
+        1.8,
+        7.8,
+        4.15
+      ],
+      "floorZ": 2.85
+    },
+    {
+      "id": "upper-east-bedroom",
+      "label": "East bedroom",
+      "position": [
+        6.5,
+        3.3,
+        4.47
+      ],
+      "target": [
+        7.5,
+        8.1,
+        4.15
+      ],
+      "floorZ": 2.85
+    }
+  ],
+  "sources": [
+    {
+      "id": "listing",
+      "label": "Zillow listing \u00b7 200 Brannan Apt 114",
+      "url": "https://www.zillow.com/homedetails/200-Brannan-St-APT-114-San-Francisco-CA-94107/69817820_zpid/",
+      "kind": "listing"
+    },
+    {
+      "id": "floor-plan",
+      "label": "Listing floor plan \u00b7 labelled Matterport-derived",
+      "url": "https://photos.zillowstatic.com/fp/21958f3c18cd9d4bf09f57b38b339f90-uncropped_scaled_within_1536_1152.png",
+      "kind": "plan"
+    },
+    {
+      "id": "photo-1",
+      "label": "Living room toward kitchen and staircase",
+      "url": "https://photos.zillowstatic.com/fp/355829cef10ca10ee8f413e8f5986962-cc_ft_1536.jpg",
+      "kind": "photo"
+    },
+    {
+      "id": "photo-2",
+      "label": "Living window and metal staircase",
+      "url": "https://photos.zillowstatic.com/fp/9bcefc890508441f8637117607c458bb-cc_ft_1536.jpg",
+      "kind": "photo"
+    },
+    {
+      "id": "photo-3",
+      "label": "Kitchen and west wall",
+      "url": "https://photos.zillowstatic.com/fp/13ae4bac714000c040b06b155b619e49-cc_ft_1536.jpg",
+      "kind": "photo"
+    },
+    {
+      "id": "photo-4",
+      "label": "Cherry cabinets and kitchen fixtures",
+      "url": "https://photos.zillowstatic.com/fp/1365f4fc746c91559821f1bf60993076-cc_ft_1536.jpg",
+      "kind": "photo"
+    }
+  ],
+  "navigation": {
+    "start": [
+      0.72,
+      0.65
+    ],
+    "targets": [
+      {
+        "id": "kitchen",
+        "label": "Kitchen approach",
+        "point": [
+          2.5,
+          3.9
+        ]
+      },
+      {
+        "id": "living",
+        "label": "Living room",
+        "point": [
+          1.8,
+          6.4
+        ]
+      },
+      {
+        "id": "stair-foot",
+        "label": "Window-side stair approach",
+        "point": [
+          3.05,
+          7.7
+        ]
+      }
+    ],
+    "clearance": 0.65,
+    "levels": [
+      {
+        "floorZ": 2.85,
+        "start": [
+          3.84,
+          4.75
+        ],
+        "targets": [
+          {
+            "id": "upper-west-bedroom",
+            "label": "West bedroom",
+            "point": [
+              1.2,
+              5.8
+            ]
+          },
+          {
+            "id": "upper-east-bedroom",
+            "label": "East bedroom",
+            "point": [
+              7.3,
+              5.0
+            ]
+          },
+          {
+            "id": "upper-bathroom",
+            "label": "Upper bathroom",
+            "point": [
+              3.05,
+              1.8
+            ]
+          },
+          {
+            "id": "upper-laundry",
+            "label": "Laundry",
+            "point": [
+              5.25,
+              2.12
+            ]
+          },
+          {
+            "id": "upper-east-closet",
+            "label": "East walk-in closet",
+            "point": [
+              7.4,
+              1.1
+            ]
+          },
+          {
+            "id": "upper-west-closet",
+            "label": "West walk-in closet",
+            "point": [
+              1.3,
+              -0.9
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "notes": [
+    "Event-created demonstration fixture traced from the listing floor plan; initial movable furniture is intentionally empty.",
+    "Room topology and labelled dimensions are source-backed: living 13 ft 11 in by 10 ft 10 in; kitchen 9 ft 6 in by 8 ft 3 in; bathroom 7 ft by 9 ft. Polygon boundaries are approximate traces, not a survey.",
+    "The listing reports 1,420 sq ft; its floor plan reports 1,379 sq ft total and 434 sq ft lower floor. These source values are not silently reconciled.",
+    "Ceiling height 2.85 m, wall thicknesses, vertical openings, stair details, fixture dimensions and materials are inferred. Plan window position is source-backed; sill and head heights are estimates.",
+    "Coordinates: metres, XY floor, Z up. All object and stair positions are bounding-box centers. Wall opening offset is distance to opening center from wall start. Rotation is radians about Z.",
+    "Listing imagery remains remote source evidence and is not redistributed as repository assets. All rendered materials and models are generated procedurally.",
+    "Photos support reddish wood flooring, dark cherry cabinetry, white worktops, brushed metal stairs/rail, and exposed concrete ceiling. Stair rise direction runs toward the kitchen; detailed rise/run remain estimates.",
+    "Photo-informed revision: refrigerator width along the east wall is estimated at 0.86 m (previous 0.44 m was visibly too narrow). It ends at Y=5.10 m; the adjacent cooking counter is shortened to 1.125 m while preserving the south-counter join. These are inferred appliance/fixture proportions, not measured dimensions.",
+    "Stair direction anchor: the lower-floor foot is at XY [3.84, 7.78] toward the window; the upper landing projects to XY [3.84, 5.30] toward the kitchen. The staircase ascends in negative Y. The main-floor route ends beside the bottom tread at [3.05, 7.70]; per-level route checks do not include stair traversal.",
+    "Upper floor added from the same supplied floor-plan panel: two bedrooms, hallway, bathroom, laundry, linen closet and two walk-in closets. Upper plan scale is approximately 66.5 pixels per metre based on labelled right-bedroom and closet dimensions; the lower panel uses a different printed scale.",
+    "Upper-floor alignment is inferred by registering its stairwell to the existing stair top XY [3.84,5.30]. The upper slab elevation 2.85 m and upper ceiling height 2.65 m are inferred. Upper polygon traces and openings preserve visible topology, not survey precision. No upper interior photo appearance has been verified.",
+    "The upper room polygons deliberately exclude the stairwell at X 3.30 to 4.38, Y 5.30 to 7.82. The upper landing begins south of the stair top at [3.84,4.75]. Edge protection is indicative geometry, not a code compliance claim.",
+    "Both floor levels can be explored. Route checks are floor-specific layout aids; simulated stair traversal does not certify real stair dimensions, headroom, accessibility or structural safety."
+  ],
+  "levels": [
+    {
+      "id": "main",
+      "label": "Main floor",
+      "floorZ": 0
+    },
+    {
+      "id": "upper",
+      "label": "Second floor",
+      "floorZ": 2.85
+    }
+  ]
+}

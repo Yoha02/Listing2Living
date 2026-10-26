@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+runtime/
+work/
+public/generated/
+public/evidence/
+*.blend1
+*.log
